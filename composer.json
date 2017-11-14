@@ -8,23 +8,26 @@
         {
             "name": "Orian de Wit",
             "email": "orian@temper.works",
-            "homepage": "https://temper.works",
-            "role": "Developer"
+            "homepage": "https://temper.works"
         }
     ],
     "require": {
-        "php" : ">=7.0"
+        "php" : ">=7.0",
+        "laravel/framework" : "^5.5"
     },
     "autoload": {
         "psr-4": {
-            "TemperWorks\\DbMask\\": "src"
+            "TemperWorks\\DBMask\\": "src/"
         }
     },
     "extra": {
         "laravel": {
             "providers": [
-
-            ]
+                "TemperWorks\\DBMask\\DBMaskServiceProvider"
+            ],
+            "aliases": {
+                "DBMask": "TemperWorks\\DBMask\\DBMaskFacade"
+            }
         }
     }
 }
