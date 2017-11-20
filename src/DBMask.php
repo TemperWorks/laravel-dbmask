@@ -18,7 +18,7 @@ class DBMask
     public function __construct(?Command $command=null)
     {
         $this->command = $command;
-        $this->db = DB::connection(config('dbmask.connection') ?? DB::getDefaultConnectcomposeion());
+        $this->db = DB::connection(config('dbmask.connection') ?? DB::getDefaultConnection());
         $this->sourceSchema = $this->db->getDatabaseName();
         $this->maskedSchema = config('dbmask.masked_schema');
         $this->materializedSchema = config('dbmask.materialized_schema');
