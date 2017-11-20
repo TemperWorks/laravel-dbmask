@@ -35,6 +35,7 @@ class SourceTable
         try {
             return (new ColumnTransformationCollection($this->table->getPrimaryKeyColumns()));
         } catch (DBALException $e) {
+            // Table without PK
             return (new ColumnTransformationCollection());
         }
     }

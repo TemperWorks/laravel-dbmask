@@ -40,15 +40,13 @@ class DBMask
 
     public function materialize(): void
     {
-        $originalSchema = $this->db->getDatabaseName();
-
         // Prepare table structure for materialized views
-        $this->db->unprepared("use $this->materializedSchema;");
-        $this->tables->each(function($_, string $tableName) use ($schema){
+        $this->tables->each(function($_, string $tableName) {
             $ddl = $this->db->select("show create table $tableName")[0]->{'Create Table'};
+            $this->db->unprepared("use $this->materializedSchema;");
             $this->db->statement($ddl);
+            $this->db->unprepared("use $this->sourceSchema;");
         });
-        $this->db->unprepared("use $originalSchema;");
 
         $this->transformTables('table', $this->materializedSchema);
     }
