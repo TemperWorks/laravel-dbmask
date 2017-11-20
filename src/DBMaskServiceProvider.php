@@ -3,7 +3,7 @@
 namespace TemperWorks\DBMask;
 
 use Illuminate\Support\ServiceProvider;
-use TemperWorks\DBMask\Console\DBMaskCommand;
+use TemperWorks\DBMask\Console\{DBMaskCommand, DBMaterializeCommand};
 
 class DBMaskServiceProvider extends ServiceProvider
 {
@@ -13,6 +13,7 @@ class DBMaskServiceProvider extends ServiceProvider
     {
         if ($this->app->runningInConsole()) {
             $this->commands([DBMaskCommand::class]);
+            $this->commands([DBMaterializeCommand::class]);
         }
 
         $this->publishes([$this->config => config_path('dbmask.php')], 'dbmask');

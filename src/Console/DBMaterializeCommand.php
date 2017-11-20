@@ -7,12 +7,12 @@ use Illuminate\Console\Command;
 use Illuminate\Console\ConfirmableTrait;
 use TemperWorks\DBMask\DBMask;
 
-class DBMaskCommand extends Command
+class DBMaterializeCommand extends Command
 {
     use ConfirmableTrait;
 
-    protected $signature = 'db:mask {--force : Force the operation.} {--remove : Removes all views.}';
-    protected $description = 'Generates masked views as specified in config/dbmask.php';
+    protected $signature = 'db:materialize {--force : Force the operation.} {--remove : Removes all tables.}';
+    protected $description = 'Generates materialized tables as specified in config/dbmask.php';
 
     public function handle(): void
     {
@@ -23,16 +23,16 @@ class DBMaskCommand extends Command
         $mask = new DBMask($this);
 
         if ($this->option('remove')) {
-            $mask->dropMasked();
+           $mask->dropMaterialized();
             return;
         }
 
         try {
-            $mask->dropMasked();
-            $mask->mask();
+            $mask->dropMaterialized();
+            $mask->materialize();
         } catch (Exception $exception) {
             $this->line('<fg=red>' . $exception->getMessage() . '</fg=red>');
-            $mask->dropMasked();
+            $mask->dropMaterialized();
         }
     }
 }

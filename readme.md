@@ -1,15 +1,28 @@
 #### DBMask
 
-Experimental package for Dynamic Database Masking. 
+Experimental package for Dynamic Database Masking.
 
-#### Install
+#### Installation
 
 Install with composer:
 ```
-composer require temperworks/laravel-dbmask
+composer update temperworks/laravel-dbmask
 ```
 
-Publish config:
+You might need to add the repository:
+```json
+{
+    "repositories": [{
+        "type": "vcs",
+        "url": "https://github.com/TemperWorks/laravel-dbmask"
+    }],
+    "require": {
+        "temperworks/laravel-dbmask": "dev-master",
+    }
+}
 ```
-php artisan vendor:publish --tag=mask
+
+Publish a sample config:
+```
+php artisan vendor:publish --tag=dbmask
 ```

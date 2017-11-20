@@ -6,8 +6,8 @@ return [
     'masked_schema' => 'anonimized',
     'materialized_schema' => 'materialized',
 
-    'auto_include_fks' => true,
-    'auto_include_pks' => true,
+    'auto_include_fks' => false,
+    'auto_include_pks' => false,
 
     'tables' => [
         'users' => [
