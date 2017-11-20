@@ -21,16 +21,26 @@ class DBMaskCommand extends Command
         }
 
         $mask = new DBMask($this);
-        $mask->fresh();
-//        $mask->fresh();
 
-        if (!$this->option('remove')) {
-            try {
-                $mask->mask();
-            } catch (Exception $exception) {
-                $this->line('<fg=red>' . $exception->getMessage() . '</fg=red>');
-                $mask->fresh();
-            }
+        if ($this->option('remove')) {
+            $mask->dropMasked();
+            return;
+        }
+
+        try {
+            $mask->dropMasked();
+            $mask->mask();
+        } catch (Exception $exception) {
+            $this->line('<fg=red>' . $exception->getMessage() . '</fg=red>');
+            $mask->dropMasked();
+        }
+
+        try {
+            $mask->dropMaterialized();
+            $mask->materialize();
+        } catch (Exception $exception) {
+            $this->line('<fg=red>' . $exception->getMessage() . '</fg=red>');
+            $mask->dropMaterialized();
         }
     }
 }

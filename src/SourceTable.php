@@ -12,14 +12,14 @@ use Illuminate\Support\Collection;
 class SourceTable
 {
     public $table;
+    public $db;
     public $name;
 
     public function __construct(string $tableName)
     {
         $this->name = $tableName;
-        $this->table = DB::connection(config('dbmask')['connection'] ?? DB::getDefaultConnection())
-            ->getDoctrineSchemaManager()
-            ->listTableDetails($tableName);
+        $this->db = DB::connection(config('dbmask')['connection'] ?? DB::getDefaultConnection());
+        $this->table = $this->db->getDoctrineSchemaManager()->listTableDetails($tableName);
     }
 
     public function getFKColumns(): ColumnTransformationCollection
@@ -37,6 +37,11 @@ class SourceTable
         } catch (DBALException $e) {
             return (new ColumnTransformationCollection());
         }
+    }
+
+    public function getColumnOrdinalPositions(): Collection
+    {
+        return collect($this->db->select("show columns from {$this->table->getName()}"))->pluck('Field');
     }
 
     public function getTimestampColumns(): ColumnTransformationCollection

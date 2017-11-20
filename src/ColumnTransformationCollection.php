@@ -19,4 +19,13 @@ class ColumnTransformationCollection extends Collection
             return is_string($key) ? [$key => $column] : [$column => '`'.$column.'`'];
         });
     }
+
+    public function sortByOrdinalPosition(SourceTable $table)
+    {
+        $positions = $table->getColumnOrdinalPositions();
+
+        return $this->sortBy(function($column, $key) use ($positions){
+            return $positions->search($key);
+        });
+    }
 }

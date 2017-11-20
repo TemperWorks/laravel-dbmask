@@ -2,10 +2,10 @@
 
 namespace TemperWorks\DBMask;
 
-use DB;
-use Exception;
+use DB, Schema, Exception;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class DBMask
 {
@@ -18,64 +18,93 @@ class DBMask
     public function __construct(?Command $command=null)
     {
         $this->command = $command;
-        $this->db = DB::connection(config('dbmask')['connection'] ?? DB::getDefaultConnection());
+        $this->db = DB::connection(config('dbmask.connection') ?? DB::getDefaultConnection());
         $this->sourceSchema = $this->db->getDatabaseName();
-        $this->maskedSchema = config('dbmask')['masked_schema'];
-        $this->materializedSchema = config('dbmask')['materialized_schema'];
+        $this->maskedSchema = config('dbmask.masked_schema');
+        $this->materializedSchema = config('dbmask.materialized_schema');
 
         $this->tables = collect(config('dbmask')['tables'])
             ->map(function($columnTransformations) {
                 return (new ColumnTransformationCollection($columnTransformations));
             });
+
+        $this->validateConfig();
+        $this->registerEnum();
+        Schema::disableForeignKeyConstraints();
     }
 
     public function mask(): void
     {
-        $this->validateConfig();
-        $this->registerEnum();
-        $this->registerMysqlFunctions();
-
-        $this->tables->each(function(ColumnTransformationCollection $columnTransformations, string $tableName){
-            $sourceTable = new SourceTable($tableName);
-
-            $this->log("creating masked view <fg=green>$sourceTable->name</fg=green> in schema <fg=blue>$this->maskedSchema</fg=blue>");
-
-            $columnTransformations = $columnTransformations
-                ->mergeWhen(config('dbmask.auto_include_pks'), $sourceTable->getPKColumns()->diff($columnTransformations->keys()))
-                ->mergeWhen(config('dbmask.auto_include_fks'), $sourceTable->getFKColumns()->diff($columnTransformations->keys()))
-                ->mergeWhen(config('dbmask.auto_include_timestamps') !== null, $sourceTable->getTimestampColumns()->diff($columnTransformations->keys()))
-                ->populateKeys();
-
-            $filter = config("dbmask.table_filters.$tableName");
-
-            $this->db->statement(
-                "create view $this->maskedSchema.$sourceTable->name as ".
-                    "select {$this->getSelectExpression($columnTransformations)} ".
-                    "from $sourceTable->name ".
-                    ($filter ? "where $filter;" : ";")
-            );
-        });
+        $this->transformTables('view', $this->maskedSchema);
     }
 
     public function materialize(): void
     {
+        $originalSchema = $this->db->getDatabaseName();
 
+        // Prepare table structure for materialized views
+        $this->db->unprepared("use $this->materializedSchema;");
+        $this->tables->each(function($_, string $tableName) use ($schema){
+            $ddl = $this->db->select("show create table $tableName")[0]->{'Create Table'};
+            $this->db->statement($ddl);
+        });
+        $this->db->unprepared("use $originalSchema;");
+
+        $this->transformTables('table', $this->materializedSchema);
     }
 
-    public function fresh(): void
+    protected function transformTables(string $viewOrTable, string $schema): void
     {
-        $this->log("Dropping all views in schema <fg=blue>$this->maskedSchema</fg=blue>");
+        $this->registerMysqlFunctions($schema);
+
+        $this->tables->each(function(ColumnTransformationCollection $columnTransformations, string $tableName) use ($schema, $viewOrTable){
+            $this->log("creating $viewOrTable <fg=green>$tableName</fg=green> in schema <fg=blue>$schema</fg=blue>");
+
+            $sourceTable = new SourceTable($tableName);
+            $columnTransformations = $columnTransformations
+                ->mergeWhen(config('dbmask.auto_include_pks'), $sourceTable->getPKColumns()->diff($columnTransformations->keys()))
+                ->mergeWhen(config('dbmask.auto_include_fks'), $sourceTable->getFKColumns()->diff($columnTransformations->keys()))
+                ->mergeWhen(config('dbmask.auto_include_timestamps') !== null, $sourceTable->getTimestampColumns()->diff($columnTransformations->keys()))
+                ->populateKeys()
+                ->sortByOrdinalPosition($sourceTable)
+            ;
+
+            $filter = config("dbmask.table_filters.$tableName");
+            $create = "create $viewOrTable $schema.$tableName ";
+            $select = "select {$this->getSelectExpression($columnTransformations)} from $tableName " . ($filter ? "where $filter; " : "; ");
+
+            $this->db->statement(
+                ($viewOrTable === 'view')
+                    ? $create . ' as ' . $select
+                    : "insert $schema.$tableName $select"
+            );
+        });
+    }
+
+    public function dropMasked()
+    {
+        $this->drop('view', $this->maskedSchema);
+    }
+
+    public function dropMaterialized()
+    {
+        $this->drop('table', $this->materializedSchema);
+    }
+
+    protected function drop(string $viewOrTable, string $schema): void
+    {
+        $this->log("Dropping all {$viewOrTable}s in schema <fg=blue>$schema</fg=blue>");
 
         $this->db->unprepared("
             start transaction;
-            delete from mysql.proc where db = '$this->maskedSchema' and type = 'function';
-            set @vw = null;
+            delete from mysql.proc where db = '$schema' and type = 'function';
+            set @t = null;
             set @@group_concat_max_len = 100000;
-            select group_concat(table_schema, '.', table_name) into @vw 
-                from information_schema.views
-                where table_schema = '$this->maskedSchema';
-            set @vw = ifnull(concat('drop view ', @vw), '');
-            prepare st from @vw; execute st; drop prepare st; 
+            select group_concat(table_schema, '.', table_name) into @t
+                from information_schema.{$viewOrTable}s
+                where table_schema = '$schema';
+            set @t = ifnull(concat('drop $viewOrTable ', @t), '');
+            prepare st from @t; execute st; drop prepare st;
             commit;"
         );
     }
@@ -98,10 +127,8 @@ class DBMask
     protected function getSelectExpression(Collection $columnTransformations): string
     {
         $select = $columnTransformations->map(function($column, $key) {
-
             $column = (starts_with($column, 'mask_random_')) ? $this->maskedSchema.'.'.$column : $column;
             $column = (starts_with($column, 'mask_bcrypt_')) ? "'".bcrypt(str_after($column,'mask_bcrypt_'))."'" : $column;
-
             return "$column as `$key`";
         })->values()->implode(', ');
 
@@ -113,14 +140,15 @@ class DBMask
         if ($this->command) $this->command->line($output);
     }
 
-    protected function registerMysqlFunctions(): void
+    protected function registerMysqlFunctions($schema): void
     {
         collect(config('dbmask')['mask_datasets'])
-            ->each(function($dataset, $setname) {
+            ->each(function($dataset, $setname) use ($schema){
                 $this->db->unprepared(
-                    "drop function if exists $this->maskedSchema.mask_random_$setname;".
-                    "create function $this->maskedSchema.mask_random_$setname(seed varchar(255)) returns varchar(255) return elt(".
-                        "mod(conv(substring(cast(sha(seed) as char),1,16),16,10)," . count($dataset) . "-1)+1, " . collect($dataset)->map(function($item){ return '"'.$item.'"'; })->implode(', ').
+                    "drop function if exists $schema.mask_random_$setname;".
+                    "create function $schema.mask_random_$setname(seed varchar(255)) returns varchar(255) return elt(".
+                        "mod(conv(substring(cast(sha(seed) as char),1,16),16,10)," . count($dataset) . "-1)+1, ".
+                        collect($dataset)->map(function($item){ return '"'.$item.'"'; })->implode(', ').
                     ");"
                 );
             });
