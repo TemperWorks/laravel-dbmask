@@ -8,12 +8,7 @@ Feedback and contributions are welcome.
 
 ## Installation
 
-Install with composer:
-```
-composer update temperworks/laravel-dbmask
-```
-
-You might need to add the repository:
+Add the repository:
 ```json
 {
     "repositories": [{
@@ -26,6 +21,11 @@ You might need to add the repository:
 }
 ```
 
+Update with composer:
+```
+composer update temperworks/laravel-dbmask
+```
+
 Publish a sample config:
 ```
 php artisan vendor:publish --tag=dbmask
@@ -33,7 +33,7 @@ php artisan vendor:publish --tag=dbmask
 
 ## Usage
 
-#### About this package
+### About this package
 
 As an example, lets take a production database with just a users table:
 
@@ -67,16 +67,11 @@ This view behaves a lot like a filtered table. All select queries to the view pa
 
 Writing hundreds of `create view` statements, and running them manually each time you update your database isn't feasible though, and that's where this package offers a solution.
 
-#### Live masked views & Materialized indexed masked views
+### Live masked views & Materialized indexed masked views
 
-This package generates all the queries for you.
+This package generates and runs all required the queries for you.
 
-After publishing the config, create the desired schemas in MySQL, edit the config, and run:
-
-```
-artisan db:mask
-artisan db:materialize
-```
+#### Configuration
 
 The `dbmask.php` config specifies the following config keys:
 
@@ -111,14 +106,27 @@ The `tables` array includes all the column transformations:
 ]
 ```
 
-The `table_filters` array can optionally include rules for masking whole rows: 
+#### Running the transformations
+
+After publishing and editing the config, create the desired schemas in MySQL, edit the config, and run:
+
+```
+artisan db:mask
+artisan db:materialize
+```
+
+#### Filtering rows
+
+The `table_filters` array can optionally include rules for excluding specific rows: 
 
 ```php
 // exclude records of people born after 2000
 'users' => 'birth_date < 2000-01-01',
-// include table as view, but truncate to zero records
+// include the whole table as a valid view, but truncate to zero records
 'audit_log' => 'false'
 ```
+
+#### Fake data providers
 
 It is possible to define custom randomization sets, for example using the [Faker](https://github.com/fzaninotto/Faker) package:
 
@@ -138,3 +146,5 @@ $faker = Faker\Factory::create('nl_NL');
     }),
 ]
 ```
+
+There currently are some limitations though: It's difficult to guarantee uniqueness with smaller sets, and very large datasets affect performance negatively in views.
