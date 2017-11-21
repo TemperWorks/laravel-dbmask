@@ -1,8 +1,10 @@
 ## DBMask
 
-Package for whitelisted Dynamic Database Masking.
+An experimental Laravel Package for whitelisted Dynamic Database Masking.
 
-**DISCLAIMER: This package is currently considered to be in Alpha. There are no guarantees it will work correctly. You are responsible for recent backups, and the safety of your data.**
+**DISCLAIMER: This package is currently considered to be in an Alpha state. There are no guarantees it will work correctly. Be sure to verify and audit the code yourself before using it, and create backups to guarantee the safety of your data.**
+
+Feedback and contributions are welcome.
 
 ## Installation
 
@@ -49,7 +51,9 @@ create table users
 )
 ```
 
-When providing this database to a data scientist, they might be interested in aggregates such as `favorite_drink` per age group. The problem is that by granting access to the production database, you'll also give them access to database columns containing `social_security_number` and (a hopefully hashed) `password` string.
+A data scientist might request a copy of this production database, and they might be interested in aggregates such as `favorite_drink` per age group. The problem is that by granting access to the production database, you'll also give them access to database columns containing `social_security_number` and (a hopefully hashed) `password` string.
+
+This is undesirable, as it increases the risk of personal data leaks.
 
 This can be remedied by creating a schema `anonimized`, granting access to the right people, and adding views with explicitly whitelisted columns as follows:
 
@@ -59,7 +63,9 @@ create view anonimized.users as
   from production.users
 ```
 
-This view behaves a lot like a filtered table. All select queries to the view pass through the `select` filter, onwards to the production database. Writing hundreds of `create view` statements, and running them manually each time you update your database isn't feasible though.
+This view behaves a lot like a filtered table. All select queries to the view pass through the `select` filter, onwards to the production database. 
+
+Writing hundreds of `create view` statements, and running them manually each time you update your database isn't feasible though, and that's where this package offers a solution.
 
 #### Live masked views & Materialized indexed masked views
 
