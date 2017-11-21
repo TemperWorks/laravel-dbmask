@@ -1,6 +1,8 @@
 ## DBMask
 
-Experimental package for whitelisted Dynamic Database Masking.
+Package for whitelisted Dynamic Database Masking.
+
+**DISCLAIMER: This package is currently considered to be in Alpha. There are no guarantees it will work correctly. You are responsible for recent backups, and the safety of your data.**
 
 ## Installation
 
