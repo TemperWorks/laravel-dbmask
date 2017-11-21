@@ -120,7 +120,7 @@ The `table_filters` array can optionally include rules for masking whole rows:
 'audit_log' => 'false'
 ```
 
-It is possible to define custom randomization sets, for example using the fzaninotto/Faker package:
+It is possible to define custom randomization sets, for example using the [Faker](https://github.com/fzaninotto/Faker) package:
 
 ```php
 $faker = Faker\Factory::create('nl_NL');
