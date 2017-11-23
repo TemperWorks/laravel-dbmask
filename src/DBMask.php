@@ -95,7 +95,6 @@ class DBMask
 
         $this->db->unprepared("
             start transaction;
-            delete from mysql.proc where db = '$schema' and type = 'function';
             set @t = null;
             set @@group_concat_max_len = 100000;
             select group_concat(table_schema, '.', table_name) into @t
