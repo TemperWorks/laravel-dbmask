@@ -21,9 +21,9 @@ class DBMaskServiceProvider extends ServiceProvider
 
     public function register()
     {
-        $this->app->bind(DBMask::class, function ($app) {
-            return new DBMask();
-        });
+//        $this->app->bind(DBMask::class, function ($app) {
+//            return new DBMask();
+//        });
 
         $this->mergeConfigFrom($this->config, 'dbmask');
     }
