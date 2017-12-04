@@ -25,9 +25,6 @@
             "providers": [
                 "TemperWorks\\DBMask\\DBMaskServiceProvider"
             ]
-//            "aliases": {
-//                "DBMask": "TemperWorks\\DBMask\\DBMaskFacade"
-//            }
         }
     }
 }
