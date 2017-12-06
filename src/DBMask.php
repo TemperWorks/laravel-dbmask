@@ -143,7 +143,7 @@ class DBMask
             ->each(function($dataset, $setname) use ($schema){
                 $this->db->unprepared(
                     "drop function if exists $schema.mask_random_$setname;".
-                    "create function $schema.mask_random_$setname(seed varchar(255)) returns varchar(255) deterministic return elt(".
+                    "create function $schema.mask_random_$setname(seed varchar(255) charset utf8) returns varchar(255) deterministic return elt(".
                         "mod(conv(substring(cast(sha(seed) as char),1,16),16,10)," . count($dataset) . "-1)+1, ".
                         collect($dataset)->map(function($item){ return '"'.$item.'"'; })->implode(', ').
                     ");"
