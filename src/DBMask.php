@@ -33,6 +33,11 @@ class DBMask
         Schema::disableForeignKeyConstraints();
     }
 
+    public function __destruct()
+    {
+        Schema::enableForeignKeyConstraints();
+    }
+
     public function mask(): void
     {
         $this->transformTables('view', $this->maskedSchema);
@@ -69,7 +74,7 @@ class DBMask
 
             $filter = config("dbmask.table_filters.$tableName");
             $create = "create $viewOrTable $schema.$tableName ";
-            $select = "select {$this->getSelectExpression($columnTransformations)} from $tableName " . ($filter ? "where $filter; " : "; ");
+            $select = "select {$this->getSelectExpression($columnTransformations, $schema)} from $tableName " . ($filter ? "where $filter; " : "; ");
 
             $this->db->statement(
                 ($viewOrTable === 'view')
@@ -121,10 +126,10 @@ class DBMask
         return collect(range(1,$number))->map($function)->toArray();
     }
 
-    protected function getSelectExpression(Collection $columnTransformations): string
+    protected function getSelectExpression(Collection $columnTransformations, string $schema): string
     {
-        $select = $columnTransformations->map(function($column, $key) {
-            $column = (starts_with($column, 'mask_random_')) ? $this->maskedSchema.'.'.$column : $column;
+        $select = $columnTransformations->map(function($column, $key) use ($schema) {
+            $column = (starts_with($column, 'mask_random_')) ? $schema.'.'.$column : $column;
             $column = (starts_with($column, 'mask_bcrypt_')) ? "'".bcrypt(str_after($column,'mask_bcrypt_'))."'" : $column;
             return "$column as `$key`";
         })->values()->implode(', ');
