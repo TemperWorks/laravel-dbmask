@@ -48,7 +48,7 @@ class DBMask
         // Prepare table structure for materialized views
         $this->tables->each(function($_, string $tableName) {
             $ddl = $this->db->select("show create table $tableName")[0]->{'Create Table'};
-            $this->db->unprepared("use $this->materializedSchema;");
+            $this->db->unprepared("use $this->materializedSchema; set FOREIGN_KEY_CHECKS=0;");
             $this->db->statement($ddl);
             $this->db->unprepared("use $this->sourceSchema;");
         });
