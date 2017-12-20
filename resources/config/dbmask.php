@@ -3,8 +3,14 @@
 use TemperWorks\DBMask\DBMask;
 
 return [
-    'masked_schema' => 'anonimized',
-    'materialized_schema' => 'materialized',
+    'masking' => [
+        'source' => 'mysql',
+        'target' => 'mysql_masking',
+    ],
+    'materializing' => [
+        'source' => 'mysql',
+        'target' => 'mysql_materializing',
+    ],
 
     'auto_include_fks' => false,
     'auto_include_pks' => false,

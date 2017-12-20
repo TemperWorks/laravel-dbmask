@@ -79,8 +79,8 @@ The `dbmask.php` config specifies the following config keys:
 |---|---|---|
 |`tables`|`[]`|An array of tables with their columns. Omitted tables will not be included in the schema, omitted columns will not be included in the views.|
 |`table_filters`|`[]`|Which rows to filter|
-|`masked_schema`|`string`|The schema name where the masked views will be stored, such as 'anonimized'|
-|`materialized`|`string`|The schema name where the materialized masked views will be stored, such as 'materialized'|
+|`masking`|`array`|Contains two Database Connection names: a `source` and a `target`|
+|`materializing`|`array`|Contains two Database Connection names: a `source` and a `target`|
 |`auto_include_fks`| `bool`| whether to include foreign keys by default|
 |`auto_include_pks`| `bool`| whether to include primary keys by default|
 |`auto_include_timestamps`| `bool` or `[]`| whether to include timestamps by default, optionally with array of column names|

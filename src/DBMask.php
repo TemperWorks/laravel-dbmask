@@ -4,63 +4,65 @@ namespace TemperWorks\DBMask;
 
 use DB, Schema, Exception;
 use Illuminate\Console\Command;
+use Illuminate\Database\Connection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class DBMask
 {
     protected $command;
-    protected $db;
-    protected $maskedSchema;
-    protected $materializedSchema;
     protected $tables;
+    /** @var Connection $masksrc */
+    protected $masksrc;
+    /** @var Connection $masktgt */
+    protected $masktgt;
+    /** @var Connection $materializesrc */
+    protected $materializesrc;
+    /** @var Connection $materializetgt */
+    protected $materializetgt;
 
     public function __construct(?Command $command=null)
     {
         $this->command = $command;
-        $this->db = DB::connection(config('dbmask.connection') ?? DB::getDefaultConnection());
-        $this->sourceSchema = $this->db->getDatabaseName();
-        $this->maskedSchema = config('dbmask.masked_schema');
-        $this->materializedSchema = config('dbmask.materialized_schema');
+        $this->masksrc = DB::connection(config('dbmask.masking.source') ?? DB::getDefaultConnection());
+        $this->masktgt = DB::connection(config('dbmask.masking.target'));
+        $this->materializesrc = DB::connection(config('dbmask.materializing.source') ?? DB::getDefaultConnection());
+        $this->materializetgt = DB::connection(config('dbmask.materializing.target'));
 
         $this->tables = collect(config('dbmask')['tables'])
             ->map(function($columnTransformations) {
                 return (new ColumnTransformationCollection($columnTransformations));
             });
 
-        $this->validateConfig();
-        $this->registerEnum();
-        Schema::disableForeignKeyConstraints();
-    }
-
-    public function __destruct()
-    {
-        Schema::enableForeignKeyConstraints();
+        $this->validateConfig($this->masksrc);
+        $this->validateConfig($this->materializesrc);
+        $this->registerEnum($this->masksrc);
+        $this->registerEnum($this->materializesrc);
     }
 
     public function mask(): void
     {
-        $this->transformTables('view', $this->maskedSchema);
+        $this->transformTables('view', $this->masksrc, $this->masktgt);
     }
 
     public function materialize(): void
     {
         // Prepare table structure for materialized views
         $this->tables->each(function($_, string $tableName) {
-            $ddl = $this->db->select("show create table $tableName")[0]->{'Create Table'};
-            $this->db->unprepared("use $this->materializedSchema; set FOREIGN_KEY_CHECKS=0;");
-            $this->db->statement($ddl);
-            $this->db->unprepared("use $this->sourceSchema;");
+            $ddl = $this->materializesrc->select("show create table $tableName")[0]->{'Create Table'};
+            $this->materializetgt->statement($ddl);
         });
 
-        $this->transformTables('table', $this->materializedSchema);
+        $this->transformTables('table', $this->materializesrc, $this->materializetgt);
     }
 
-    protected function transformTables(string $viewOrTable, string $schema): void
+    protected function transformTables(string $viewOrTable, Connection $src, Connection $tgt): void
     {
-        $this->registerMysqlFunctions($schema);
+        $src->getSchemaBuilder()->disableForeignKeyConstraints();
+        $this->registerMysqlFunctions($tgt);
 
-        $this->tables->each(function(ColumnTransformationCollection $columnTransformations, string $tableName) use ($schema, $viewOrTable){
+        $this->tables->each(function(ColumnTransformationCollection $columnTransformations, string $tableName) use ($src, $tgt, $viewOrTable){
+            $schema = $tgt->getDatabaseName();
             $this->log("creating $viewOrTable <fg=green>$tableName</fg=green> in schema <fg=blue>$schema</fg=blue>");
 
             $sourceTable = new SourceTable($tableName);
@@ -74,31 +76,33 @@ class DBMask
 
             $filter = config("dbmask.table_filters.$tableName");
             $create = "create $viewOrTable $schema.$tableName ";
-            $select = "select {$this->getSelectExpression($columnTransformations, $schema)} from $tableName " . ($filter ? "where $filter; " : "; ");
+            $select = "select {$this->getSelectExpression($columnTransformations, $src)} from $tableName " . ($filter ? "where $filter; " : "; ");
 
-            $this->db->statement(
+            $src->statement(
                 ($viewOrTable === 'view')
                     ? $create . ' as ' . $select
                     : "insert $schema.$tableName $select"
             );
         });
+        $src->getSchemaBuilder()->enableForeignKeyConstraints();
     }
 
     public function dropMasked()
     {
-        $this->drop('view', $this->maskedSchema);
+        $this->drop('view', $this->masktgt);
     }
 
     public function dropMaterialized()
     {
-        $this->drop('table', $this->materializedSchema);
+        $this->drop('table', $this->materializetgt);
     }
 
-    protected function drop(string $viewOrTable, string $schema): void
+    protected function drop(string $viewOrTable, Connection $tgt): void
     {
+        $schema = $tgt->getDatabaseName();
         $this->log("Dropping all {$viewOrTable}s in schema <fg=blue>$schema</fg=blue>");
 
-        $this->db->unprepared("
+        $tgt->unprepared("
             start transaction;
             set @t = null;
             set @@group_concat_max_len = 100000;
@@ -126,8 +130,9 @@ class DBMask
         return collect(range(1,$number))->map($function)->toArray();
     }
 
-    protected function getSelectExpression(Collection $columnTransformations, string $schema): string
+    protected function getSelectExpression(Collection $columnTransformations, Connection $src): string
     {
+        $schema = $src->getDatabaseName();
         $select = $columnTransformations->map(function($column, $key) use ($schema) {
             $column = (starts_with($column, 'mask_random_')) ? $schema.'.'.$column : $column;
             $column = (starts_with($column, 'mask_bcrypt_')) ? "'".bcrypt(str_after($column,'mask_bcrypt_'))."'" : $column;
@@ -142,11 +147,12 @@ class DBMask
         if ($this->command) $this->command->line($output);
     }
 
-    protected function registerMysqlFunctions($schema): void
+    protected function registerMysqlFunctions(Connection $tgt): void
     {
         collect(config('dbmask')['mask_datasets'])
-            ->each(function($dataset, $setname) use ($schema){
-                $this->db->unprepared(
+            ->each(function($dataset, $setname) use ($tgt){
+                $schema = $tgt->getDatabaseName();
+                $tgt->unprepared(
                     "drop function if exists $schema.mask_random_$setname;".
                     "create function $schema.mask_random_$setname(seed varchar(255) charset utf8) returns varchar(255) deterministic return elt(".
                         "mod(conv(substring(cast(sha(seed) as char),1,16),16,10)," . count($dataset) . "-1)+1, ".
@@ -156,9 +162,9 @@ class DBMask
             });
     }
 
-    protected function validateConfig(): void
+    protected function validateConfig(Connection $src): void
     {
-        $sourceTables = $this->db->getDoctrineSchemaManager()->listTableNames();
+        $sourceTables = $src->getDoctrineSchemaManager()->listTableNames();
         $missingTables = $this->tables->keys()->diff($sourceTables);
 
         if ($missingTables->isNotEmpty()) {
@@ -166,9 +172,9 @@ class DBMask
         }
     }
 
-    protected function registerEnum(): void
+    protected function registerEnum(Connection $src): void
     {
-        $this->db->getDoctrineSchemaManager()
+        $src->getDoctrineSchemaManager()
             ->getDatabasePlatform()
             ->registerDoctrineTypeMapping('enum', 'string');
     }
