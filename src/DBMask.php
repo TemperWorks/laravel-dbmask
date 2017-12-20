@@ -48,10 +48,12 @@ class DBMask
     public function materialize(): void
     {
         // Prepare table structure for materialized views
+        $this->materializetgt->getSchemaBuilder()->disableForeignKeyConstraints();
         $this->tables->each(function($_, string $tableName) {
             $ddl = $this->materializesrc->select("show create table $tableName")[0]->{'Create Table'};
             $this->materializetgt->statement($ddl);
         });
+        $this->materializetgt->getSchemaBuilder()->enableForeignKeyConstraints();
 
         $this->transformTables('table', $this->materializesrc, $this->materializetgt);
     }
