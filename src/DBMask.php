@@ -78,7 +78,7 @@ class DBMask
 
             $filter = config("dbmask.table_filters.$tableName");
             $create = "create $viewOrTable $schema.$tableName ";
-            $select = "select {$this->getSelectExpression($columnTransformations, $src)} from $tableName " . ($filter ? "where $filter; " : "; ");
+            $select = "select {$this->getSelectExpression($columnTransformations, $schema)} from $tableName " . ($filter ? "where $filter; " : "; ");
 
             $src->statement(
                 ($viewOrTable === 'view')
@@ -132,9 +132,8 @@ class DBMask
         return collect(range(1,$number))->map($function)->toArray();
     }
 
-    protected function getSelectExpression(Collection $columnTransformations, Connection $src): string
+    protected function getSelectExpression(Collection $columnTransformations, string $schema): string
     {
-        $schema = $src->getDatabaseName();
         $select = $columnTransformations->map(function($column, $key) use ($schema) {
             $column = (starts_with($column, 'mask_random_')) ? $schema.'.'.$column : $column;
             $column = (starts_with($column, 'mask_bcrypt_')) ? "'".bcrypt(str_after($column,'mask_bcrypt_'))."'" : $column;
