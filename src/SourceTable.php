@@ -15,11 +15,10 @@ class SourceTable
     public $db;
     public $name;
 
-    public function __construct(string $tableName)
+    public function __construct($connection, string $tableName)
     {
         $this->name = $tableName;
-        $this->db = DB::connection(config('dbmask')['connection'] ?? DB::getDefaultConnection());
-        $this->registerEnum($this->db);
+        $this->db = $connection;
         $this->table = $this->db->getDoctrineSchemaManager()->listTableDetails($tableName);
     }
 
@@ -54,12 +53,5 @@ class SourceTable
                 $include = is_array($timestampConfig) ? in_array($column->getName(), $timestampConfig) : $column->getType() instanceof DateTimeType;
                 return $include ? $carry->push($column->getName()) : $carry;
             }, new ColumnTransformationCollection());
-    }
-
-    protected function registerEnum($src): void
-    {
-        $src->getDoctrineSchemaManager()
-            ->getDatabasePlatform()
-            ->registerDoctrineTypeMapping('enum', 'string');
     }
 }

@@ -67,7 +67,7 @@ class DBMask
             $schema = $tgt->getDatabaseName();
             $this->log("creating $viewOrTable <fg=green>$tableName</fg=green> in schema <fg=blue>$schema</fg=blue>");
 
-            $sourceTable = new SourceTable($tableName);
+            $sourceTable = new SourceTable($src, $tableName);
             $columnTransformations = $columnTransformations
                 ->mergeWhen(config('dbmask.auto_include_pks'), $sourceTable->getPKColumns()->diff($columnTransformations->keys()))
                 ->mergeWhen(config('dbmask.auto_include_fks'), $sourceTable->getFKColumns()->diff($columnTransformations->keys()))
@@ -108,7 +108,8 @@ class DBMask
             start transaction;
             set @t = null;
             set @@group_concat_max_len = 100000;
-            select group_concat(table_schema, '.', table_name) into @t
+            set foreign_key_checks = 0; 
+            select group_concat('`', table_schema, '`.`', table_name, '`') into @t
                 from information_schema.{$viewOrTable}s
                 where table_schema = '$schema';
             set @t = ifnull(concat('drop $viewOrTable ', @t), '');

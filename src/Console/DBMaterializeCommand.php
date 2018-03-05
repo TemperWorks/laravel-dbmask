@@ -23,7 +23,7 @@ class DBMaterializeCommand extends Command
         $mask = new DBMask($this);
 
         if ($this->option('remove')) {
-           $mask->dropMaterialized();
+            $mask->dropMaterialized();
             return;
         }
 
