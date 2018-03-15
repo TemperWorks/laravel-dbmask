@@ -2,6 +2,7 @@
 
 namespace TemperWorks\DBMask\Console;
 
+use DB;
 use Exception;
 use Illuminate\Console\Command;
 use Illuminate\Console\ConfirmableTrait;
@@ -20,7 +21,11 @@ class DBMaskCommand extends Command
             return;
         }
 
-        $mask = new DBMask($this);
+        $mask = new DBMask(
+            DB::connection(config('dbmask.masking.source') ?? DB::getDefaultConnection()),
+            DB::connection(config('dbmask.masking.target')),
+            $this
+        );
 
         if ($this->option('remove')) {
             $mask->dropMasked();

@@ -6,97 +6,93 @@ use DB, Schema, Exception;
 use Illuminate\Console\Command;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
 
 class DBMask
 {
     protected $command;
     protected $tables;
-    /** @var Connection $masksrc */
-    protected $masksrc;
-    /** @var Connection $masktgt */
-    protected $masktgt;
-    /** @var Connection $materializesrc */
-    protected $materializesrc;
-    /** @var Connection $materializetgt */
-    protected $materializetgt;
+    /** @var Connection $source */
+    protected $source;
+    /** @var Connection $target */
+    protected $target;
 
-    public function __construct(?Command $command=null)
+    public function __construct(Connection $source, Connection $target, ?Command $command=null)
     {
         $this->command = $command;
-        $this->masksrc = DB::connection(config('dbmask.masking.source') ?? DB::getDefaultConnection());
-        $this->masktgt = DB::connection(config('dbmask.masking.target'));
-        $this->materializesrc = DB::connection(config('dbmask.materializing.source') ?? DB::getDefaultConnection());
-        $this->materializetgt = DB::connection(config('dbmask.materializing.target'));
+        $this->source = $source;
+        $this->target = $target;
+
+        $this->source->getDoctrineSchemaManager()
+            ->getDatabasePlatform()
+            ->registerDoctrineTypeMapping('enum', 'string');
 
         $this->tables = collect(config('dbmask')['tables'])
-            ->map(function($columnTransformations) {
-                return (new ColumnTransformationCollection($columnTransformations));
+            ->map(function(array $columnTransformations, string $tableName) {
+                $sourceTable = new SourceTable($this->source, $tableName);
+                $columnTransformations = new ColumnTransformationCollection($columnTransformations);
+
+                return $columnTransformations
+                    ->mergeWhen((bool) config('dbmask.auto_include_pks'),
+                        $sourceTable->getPKColumns()->diff($columnTransformations->keys()))
+                    ->mergeWhen((bool) config('dbmask.auto_include_fks'),
+                        $sourceTable->getFKColumns()->diff($columnTransformations->keys()))
+                    ->mergeWhen(config('dbmask.auto_include_timestamps') !== null,
+                        $sourceTable->getTimestampColumns()->diff($columnTransformations->keys()))
+                    ->populateKeys()
+                    ->sortByOrdinalPosition($sourceTable);
             });
 
-        $this->validateConfig($this->masksrc);
-        $this->validateConfig($this->materializesrc);
-        $this->registerEnum($this->masksrc);
-        $this->registerEnum($this->materializesrc);
+        $this->validateConfig();
     }
 
     public function mask(): void
     {
-        $this->transformTables('view', $this->masksrc, $this->masktgt);
+        $this->transformTables('view');
     }
 
     public function materialize(): void
     {
         // Prepare table structure for materialized views
-        $this->materializetgt->getSchemaBuilder()->disableForeignKeyConstraints();
+        $this->target->getSchemaBuilder()->disableForeignKeyConstraints();
         $this->tables->each(function($_, string $tableName) {
-            $ddl = $this->materializesrc->select("show create table $tableName")[0]->{'Create Table'};
-            $this->materializetgt->statement($ddl);
+            $ddl = $this->source->select("show create table $tableName")[0]->{'Create Table'};
+            $this->target->statement($ddl);
         });
-        $this->materializetgt->getSchemaBuilder()->enableForeignKeyConstraints();
+        $this->target->getSchemaBuilder()->enableForeignKeyConstraints();
 
-        $this->transformTables('table', $this->materializesrc, $this->materializetgt);
+        $this->transformTables('table');
     }
 
-    protected function transformTables(string $viewOrTable, Connection $src, Connection $tgt): void
+    protected function transformTables(string $viewOrTable): void
     {
-        $src->getSchemaBuilder()->disableForeignKeyConstraints();
-        $this->registerMysqlFunctions($tgt);
+        $this->source->getSchemaBuilder()->disableForeignKeyConstraints();
+        $this->registerMysqlFunctions();
 
-        $this->tables->each(function(ColumnTransformationCollection $columnTransformations, string $tableName) use ($src, $tgt, $viewOrTable){
-            $schema = $tgt->getDatabaseName();
+        $this->tables->each(function(ColumnTransformationCollection $columnTransformations, string $tableName) use ($viewOrTable){
+            $schema = $this->target->getDatabaseName();
             $this->log("creating $viewOrTable <fg=green>$tableName</fg=green> in schema <fg=blue>$schema</fg=blue>");
-
-            $sourceTable = new SourceTable($src, $tableName);
-            $columnTransformations = $columnTransformations
-                ->mergeWhen(config('dbmask.auto_include_pks'), $sourceTable->getPKColumns()->diff($columnTransformations->keys()))
-                ->mergeWhen(config('dbmask.auto_include_fks'), $sourceTable->getFKColumns()->diff($columnTransformations->keys()))
-                ->mergeWhen(config('dbmask.auto_include_timestamps') !== null, $sourceTable->getTimestampColumns()->diff($columnTransformations->keys()))
-                ->populateKeys()
-                ->sortByOrdinalPosition($sourceTable)
-            ;
 
             $filter = config("dbmask.table_filters.$tableName");
             $create = "create $viewOrTable $schema.$tableName ";
             $select = "select {$this->getSelectExpression($columnTransformations, $schema)} from $tableName " . ($filter ? "where $filter; " : "; ");
 
-            $src->statement(
+            $this->source->statement(
                 ($viewOrTable === 'view')
                     ? $create . ' as ' . $select
                     : "insert $schema.$tableName $select"
             );
         });
-        $src->getSchemaBuilder()->enableForeignKeyConstraints();
+        $this->source->getSchemaBuilder()->enableForeignKeyConstraints();
     }
 
     public function dropMasked()
     {
-        $this->drop('view', $this->masktgt);
+        $this->drop('view', $this->target);
     }
 
     public function dropMaterialized()
     {
-        $this->drop('table', $this->materializetgt);
+        $this->drop('table', $this->target);
     }
 
     protected function drop(string $viewOrTable, Connection $tgt): void
@@ -149,12 +145,12 @@ class DBMask
         if ($this->command) $this->command->line($output);
     }
 
-    protected function registerMysqlFunctions(Connection $tgt): void
+    protected function registerMysqlFunctions(): void
     {
         collect(config('dbmask')['mask_datasets'])
-            ->each(function($dataset, $setname) use ($tgt){
-                $schema = $tgt->getDatabaseName();
-                $tgt->unprepared(
+            ->each(function($dataset, $setname) {
+                $schema = $this->target->getDatabaseName();
+                $this->target->unprepared(
                     "drop function if exists $schema.mask_random_$setname;".
                     "create function $schema.mask_random_$setname(seed varchar(255) charset utf8) returns varchar(255) deterministic return elt(".
                         "mod(conv(substring(cast(sha(seed) as char),1,16),16,10)," . count($dataset) . "-1)+1, ".
@@ -164,20 +160,13 @@ class DBMask
             });
     }
 
-    protected function validateConfig(Connection $src): void
+    public function validateConfig(): void
     {
-        $sourceTables = $src->getDoctrineSchemaManager()->listTableNames();
+        $sourceTables = $this->source->getDoctrineSchemaManager()->listTableNames();
         $missingTables = $this->tables->keys()->diff($sourceTables);
 
         if ($missingTables->isNotEmpty()) {
             throw new Exception('Config contains invalid tables: ' . $missingTables->implode(', '));
         }
-    }
-
-    protected function registerEnum(Connection $src): void
-    {
-        $src->getDoctrineSchemaManager()
-            ->getDatabasePlatform()
-            ->registerDoctrineTypeMapping('enum', 'string');
     }
 }
