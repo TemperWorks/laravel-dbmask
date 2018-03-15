@@ -2,11 +2,11 @@
 
 namespace TemperWorks\DBMask;
 
-use DB;
 use Doctrine\DBAL\DBALException;
 use Doctrine\DBAL\Schema\Column;
 use Doctrine\DBAL\Schema\ForeignKeyConstraint;
 use Doctrine\DBAL\Types\DateTimeType;
+use Illuminate\Database\Connection;
 use Illuminate\Support\Collection;
 
 class SourceTable
@@ -15,7 +15,7 @@ class SourceTable
     public $db;
     public $name;
 
-    public function __construct($connection, string $tableName)
+    public function __construct(Connection $connection, string $tableName)
     {
         $this->name = $tableName;
         $this->db = $connection;
