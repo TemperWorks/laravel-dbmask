@@ -22,14 +22,6 @@ class SourceTable
         $this->table = $this->db->getDoctrineSchemaManager()->listTableDetails($tableName);
     }
 
-    public function getFKColumns(): ColumnTransformationCollection
-    {
-        return (new ColumnTransformationCollection($this->table->getForeignKeys()))
-            ->flatMap(function(ForeignKeyConstraint $key) {
-                return $key->getLocalColumns();
-            });
-    }
-
     public function getPKColumns(): ColumnTransformationCollection
     {
         try {
@@ -42,7 +34,7 @@ class SourceTable
 
     public function getColumnOrdinalPositions(): Collection
     {
-        return collect($this->db->select("show columns from {$this->table->getName()}"))->pluck('Field');
+        return collect($this->db->getSchemaBuilder()->getColumnListing($this->table->getName()));
     }
 
     public function getTimestampColumns(): ColumnTransformationCollection

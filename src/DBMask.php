@@ -2,13 +2,16 @@
 
 namespace TemperWorks\DBMask;
 
-use DB, Schema, Exception;
+use Exception;
 use Illuminate\Console\Command;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Collection;
 
 class DBMask
 {
+    const TARGET_MATERIALIZE = 'table';
+    const TARGET_MASK = 'view';
+
     protected $command;
     protected $tables;
     /** @var Connection $source */
@@ -16,7 +19,7 @@ class DBMask
     /** @var Connection $target */
     protected $target;
 
-    public function __construct(Connection $source, Connection $target, ?Command $command=null)
+    public function __construct(Connection $source, ?Connection $target=null, ?Command $command=null)
     {
         $this->command = $command;
         $this->source = $source;
@@ -34,24 +37,23 @@ class DBMask
                 return $columnTransformations
                     ->mergeWhen((bool) config('dbmask.auto_include_pks'),
                         $sourceTable->getPKColumns()->diff($columnTransformations->keys()))
-                    ->mergeWhen((bool) config('dbmask.auto_include_fks'),
-                        $sourceTable->getFKColumns()->diff($columnTransformations->keys()))
                     ->mergeWhen(config('dbmask.auto_include_timestamps') !== null,
                         $sourceTable->getTimestampColumns()->diff($columnTransformations->keys()))
                     ->populateKeys()
                     ->sortByOrdinalPosition($sourceTable);
             });
-
-        $this->validateConfig();
     }
 
     public function mask(): void
     {
-        $this->transformTables('view');
+        $this->validateConfig(DBMask::TARGET_MASK);
+        $this->transformTables(DBMask::TARGET_MASK);
     }
 
     public function materialize(): void
     {
+        $this->validateConfig(DBMask::TARGET_MATERIALIZE);
+
         // Prepare table structure for materialized views
         $this->target->getSchemaBuilder()->disableForeignKeyConstraints();
         $this->tables->each(function($_, string $tableName) {
@@ -60,24 +62,24 @@ class DBMask
         });
         $this->target->getSchemaBuilder()->enableForeignKeyConstraints();
 
-        $this->transformTables('table');
+        $this->transformTables(DBMask::TARGET_MATERIALIZE);
     }
 
-    protected function transformTables(string $viewOrTable): void
+    protected function transformTables(string $targetType): void
     {
         $this->source->getSchemaBuilder()->disableForeignKeyConstraints();
         $this->registerMysqlFunctions();
 
-        $this->tables->each(function(ColumnTransformationCollection $columnTransformations, string $tableName) use ($viewOrTable){
+        $this->tables->each(function(ColumnTransformationCollection $columnTransformations, string $tableName) use ($targetType){
             $schema = $this->target->getDatabaseName();
-            $this->log("creating $viewOrTable <fg=green>$tableName</fg=green> in schema <fg=blue>$schema</fg=blue>");
+            $this->log("creating $targetType <fg=green>$tableName</fg=green> in schema <fg=blue>$schema</fg=blue>");
 
             $filter = config("dbmask.table_filters.$tableName");
-            $create = "create $viewOrTable $schema.$tableName ";
+            $create = "create $targetType $schema.$tableName ";
             $select = "select {$this->getSelectExpression($columnTransformations, $schema)} from $tableName " . ($filter ? "where $filter; " : "; ");
 
             $this->source->statement(
-                ($viewOrTable === 'view')
+                ($targetType === 'view')
                     ? $create . ' as ' . $select
                     : "insert $schema.$tableName $select"
             );
@@ -95,10 +97,10 @@ class DBMask
         $this->drop('table', $this->target);
     }
 
-    protected function drop(string $viewOrTable, Connection $tgt): void
+    protected function drop(string $targetType, Connection $tgt): void
     {
         $schema = $tgt->getDatabaseName();
-        $this->log("Dropping all {$viewOrTable}s in schema <fg=blue>$schema</fg=blue>");
+        $this->log("Dropping all {$targetType}s in schema <fg=blue>$schema</fg=blue>");
 
         $tgt->unprepared("
             start transaction;
@@ -106,9 +108,9 @@ class DBMask
             set @@group_concat_max_len = 100000;
             set foreign_key_checks = 0; 
             select group_concat('`', table_schema, '`.`', table_name, '`') into @t
-                from information_schema.{$viewOrTable}s
+                from information_schema.{$targetType}s
                 where table_schema = '$schema';
-            set @t = ifnull(concat('drop $viewOrTable ', @t), '');
+            set @t = ifnull(concat('drop $targetType ', @t), '');
             prepare st from @t; execute st; drop prepare st;
             commit;"
         );
@@ -160,13 +162,31 @@ class DBMask
             });
     }
 
-    public function validateConfig(): void
+    public function validateConfig(string $targetType): void
     {
         $sourceTables = $this->source->getDoctrineSchemaManager()->listTableNames();
         $missingTables = $this->tables->keys()->diff($sourceTables);
 
-        if ($missingTables->isNotEmpty()) {
+        if ($missingTables->isNotEmpty())
             throw new Exception('Config contains invalid tables: ' . $missingTables->implode(', '));
+
+        if ($targetType === DBMask::TARGET_MATERIALIZE) {
+            $this->tables->each(function(ColumnTransformationCollection $columns, string $tableName) {
+                $sourceColumns = array_keys($this->source->getDoctrineSchemaManager()->listTableDetails($tableName)->getColumns());
+                $missingInSchema = $columns->keys()->map(function($name) { return strtolower($name); })->diff($sourceColumns);
+                if ($missingInSchema->isNotEmpty())
+                    throw new Exception(
+                        "$tableName in config/dbmask has columns which do not exist in the database: " . $missingInSchema->implode(', ')
+                    );
+
+                $missingInConfig = collect($sourceColumns)->diff($columns->keys()->map(function($name) { return strtolower($name); }));
+
+                if ($missingInConfig->isNotEmpty()) {
+                    throw new Exception(
+                        "$tableName in database has columns which are not defined in config/dbmask: " . $missingInConfig->implode(', ')
+                    );
+                }
+            });
         }
     }
 }
