@@ -42,7 +42,7 @@ class SourceTable
 
     public function getColumnOrdinalPositions(): Collection
     {
-        return collect($this->db->select("show columns from {$this->table->getName()}"))->pluck('Field');
+        return collect($this->db->getSchemaBuilder()->getColumnListing($this->table->getName()));
     }
 
     public function getTimestampColumns(): ColumnTransformationCollection
