@@ -22,14 +22,6 @@ class SourceTable
         $this->table = $this->db->getDoctrineSchemaManager()->listTableDetails($tableName);
     }
 
-    public function getFKColumns(): ColumnTransformationCollection
-    {
-        return (new ColumnTransformationCollection($this->table->getForeignKeys()))
-            ->flatMap(function(ForeignKeyConstraint $key) {
-                return $key->getLocalColumns();
-            });
-    }
-
     public function getPKColumns(): ColumnTransformationCollection
     {
         try {

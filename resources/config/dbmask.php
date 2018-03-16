@@ -12,8 +12,8 @@ return [
         'target' => 'mysql_materializing',
     ],
 
-    'auto_include_fks' => false,
     'auto_include_pks' => false,
+    'auto_include_timestamps' => ['created_at', 'updated_at'],
 
     'tables' => [
         'users' => [
