@@ -11,6 +11,12 @@ return [
         'source' => 'mysql',
         'target' => 'mysql_materializing',
     ],
+    'materializing_lite' => [
+        'enabled' => false,
+        'source' => 'mysql',
+        'target' => 'mysql_materializing_lite',
+    ],
+
 
     'auto_include_pks' => false,
     'auto_include_timestamps' => ['created_at', 'updated_at'],
