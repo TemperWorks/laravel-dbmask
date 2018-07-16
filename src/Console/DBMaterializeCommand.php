@@ -12,7 +12,7 @@ class DBMaterializeCommand extends Command
 {
     use ConfirmableTrait;
 
-    protected $signature = 'db:materialize {--force : Force the operation.} {--remove : Removes all tables.}';
+    protected $signature = 'db:materialize {--force : Force the operation.} {--remove : Removes all tables.}{--lite : Doesn\'t include heavy tables}';
     protected $description = 'Generates materialized tables as specified in config/dbmask.php';
 
     public function handle(): void
@@ -21,9 +21,14 @@ class DBMaterializeCommand extends Command
             return;
         }
 
+        if($this->option('lite') || config('dbmask.materializing_lite.enabled')) {
+            config(['dbmask.materializing_lite.enabled' => true]);
+            $target = 'dbmask.materializing_lite.target';
+        }
+
         $mask = new DBMask(
             DB::connection(config('dbmask.materializing.source') ?? DB::getDefaultConnection()),
-            DB::connection(config('dbmask.materializing.target')),
+            DB::connection(config($target ?? 'dbmask.materializing.target')),
             $this
         );
 
