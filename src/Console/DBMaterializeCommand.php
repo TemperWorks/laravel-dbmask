@@ -21,7 +21,7 @@ class DBMaterializeCommand extends Command
             return;
         }
 
-        if($this->option('lite')) {
+        if($this->option('lite') || config('dbmask.materializing_lite.enabled')) {
             config(['dbmask.materializing_lite.enabled' => true]);
             $target = 'dbmask.materializing_lite.target';
         }
