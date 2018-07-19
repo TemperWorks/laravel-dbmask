@@ -19,6 +19,9 @@ class DBMask
     /** @var Connection $target */
     protected $target;
 
+    /** @var array */
+    protected $filters = [];
+
     public function __construct(Connection $source, ?Connection $target=null, ?Command $command=null)
     {
         $this->command = $command;
@@ -74,7 +77,7 @@ class DBMask
             $schema = $this->target->getDatabaseName();
             $this->log("creating $targetType <fg=green>$tableName</fg=green> in schema <fg=blue>$schema</fg=blue>");
 
-            $filter = config("dbmask.table_filters.$tableName");
+            $filter = data_get($this->filters, $tableName);
             $create = "create $targetType $schema.$tableName ";
             $select = "select {$this->getSelectExpression($columnTransformations, $schema)} from $tableName " . ($filter ? "where $filter; " : "; ");
 
@@ -188,5 +191,10 @@ class DBMask
                 }
             });
         }
+    }
+
+    public function setFilters(array $filters) : void
+    {
+        $this->filters = $filters;
     }
 }
