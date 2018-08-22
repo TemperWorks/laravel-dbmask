@@ -13,9 +13,9 @@ class DBMaterializeCommand extends Command
     use ConfirmableTrait;
 
     protected $signature = 'db:materialize 
-                                {--filter : Tables to ignore (comma separated)}
-                                {--source: Source database name} 
-                                {--target: Target database name}
+                                {filter?* : (array) Tables to ignore }
+                                {--source= : Source database name} 
+                                {--target= : Target database name}
                                 {--force : Force the operation.} 
                                 {--remove : Removes all tables.}';
     protected $description = 'Generates materialized tables as specified in config/dbmask.php';
@@ -32,8 +32,7 @@ class DBMaterializeCommand extends Command
             $this
         );
 
-        $filters_array = explode(',', trim($this->option('filter') ?: ''));
-        $filters = collect($filters_array)->flip()->map(function(){ return 'false'; });
+        $filters = collect($this->argument('filter') ?? [])->flip()->map(function(){ return 'false'; });
 
         $mask->setFilters(
             array_merge(config('dbmask.table_filters'), $filters->toArray())
