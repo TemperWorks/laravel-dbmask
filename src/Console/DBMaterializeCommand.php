@@ -12,7 +12,12 @@ class DBMaterializeCommand extends Command
 {
     use ConfirmableTrait;
 
-    protected $signature = 'db:materialize {--force : Force the operation.} {--remove : Removes all tables.}';
+    protected $signature = 'db:materialize 
+                                {filter?* : (array) Tables to ignore }
+                                {--source= : Source database name} 
+                                {--target= : Target database name}
+                                {--force : Force the operation.} 
+                                {--remove : Removes all tables.}';
     protected $description = 'Generates materialized tables as specified in config/dbmask.php';
 
     public function handle(): void
@@ -22,9 +27,15 @@ class DBMaterializeCommand extends Command
         }
 
         $mask = new DBMask(
-            DB::connection(config('dbmask.materializing.source') ?? DB::getDefaultConnection()),
-            DB::connection(config('dbmask.materializing.target')),
+            DB::connection($this->option('source') ?: (config('dbmask.materializing.source') ?? DB::getDefaultConnection()) ),
+            DB::connection($this->option('target') ?: config('dbmask.materializing.target')),
             $this
+        );
+
+        $filters = collect($this->argument('filter') ?? [])->flip()->map(function(){ return 'false'; });
+
+        $mask->setFilters(
+            array_merge(config('dbmask.table_filters'), $filters->toArray())
         );
 
         if ($this->option('remove')) {
