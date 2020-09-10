@@ -6,6 +6,7 @@ use Exception;
 use Illuminate\Console\Command;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class DBMask
 {
@@ -137,8 +138,8 @@ class DBMask
     protected function getSelectExpression(Collection $columnTransformations, string $schema): string
     {
         $select = $columnTransformations->map(function($column, $key) use ($schema) {
-            $column = (starts_with($column, 'mask_random_')) ? $schema.'.'.$column : $column;
-            $column = (starts_with($column, 'mask_bcrypt_')) ? "'".bcrypt(str_after($column,'mask_bcrypt_'))."'" : $column;
+            $column = Str::startsWith($column, 'mask_random_') ? $schema.'.'.$column : $column;
+            $column = Str::startsWith($column, 'mask_bcrypt_') ? "'".bcrypt(Str::after($column,'mask_bcrypt_'))."'" : $column;
             return "$column as `$key`";
         })->values()->implode(', ');
 
