@@ -202,11 +202,6 @@ class DBMask
         return $notices;
     }
 
-    public function missingTablesInConfig()
-    {
-
-    }
-
     public function setFilters(array $filters) : void
     {
         $this->filters = $filters;
