@@ -50,13 +50,18 @@ class DBMask
 
     public function mask(): void
     {
-        $this->validateConfig(DBMask::TARGET_MASK);
+        $validation = $this->validateConfig(DBMask::TARGET_MASK);
+        if ($validation->except('Defined Tables Missing In DBMask Config')->isNotEmpty())
+            throw new Exception($validation->toJson(JSON_PRETTY_PRINT));
+
         $this->transformTables(DBMask::TARGET_MASK);
     }
 
     public function materialize(): void
     {
-        $this->validateConfig(DBMask::TARGET_MATERIALIZE);
+        $validation = $this->validateConfig(DBMask::TARGET_MATERIALIZE);
+        if ($validation->except('Defined Tables Missing In DBMask Config')->isNotEmpty())
+            throw new Exception($validation->toJson(JSON_PRETTY_PRINT));
 
         // Prepare table structure for materialized views
         $this->target->getSchemaBuilder()->disableForeignKeyConstraints();
@@ -166,32 +171,40 @@ class DBMask
             });
     }
 
-    public function validateConfig(string $targetType): void
+    public function validateConfig(string $targetType): Collection
     {
-        $sourceTables = $this->source->getDoctrineSchemaManager()->listTableNames();
-        $missingTables = $this->tables->keys()->diff($sourceTables);
+        $notices = collect();
+        $schemaManager = $this->source->getDoctrineSchemaManager();
 
-        if ($missingTables->isNotEmpty())
-            throw new Exception('Config contains invalid tables: ' . $missingTables->implode(', '));
+        $sourceTables = collect($schemaManager->listTableNames());
+        $configTables = $this->tables->keys();
+
+        $tablesMissingInSchema = $configTables->diff($sourceTables);
+        $tablesMissingInConfig = $sourceTables->diff($configTables);
+
+        if ($tablesMissingInSchema->isNotEmpty()) $notices['Defined Tables Missing In DB Schema'] = $tablesMissingInSchema;
+        if ($tablesMissingInConfig->isNotEmpty()) $notices['Defined Tables Missing In DBMask Config'] = $tablesMissingInConfig;
 
         if ($targetType === DBMask::TARGET_MATERIALIZE) {
-            $this->tables->each(function(ColumnTransformationCollection $columns, string $tableName) {
-                $sourceColumns = array_keys($this->source->getDoctrineSchemaManager()->listTableDetails($tableName)->getColumns());
-                $missingInSchema = $columns->keys()->map(function($name) { return strtolower($name); })->diff($sourceColumns);
-                if ($missingInSchema->isNotEmpty())
-                    throw new Exception(
-                        "$tableName in config/dbmask has columns which do not exist in the database: " . $missingInSchema->implode(', ')
-                    );
+            $this->tables->each(function(ColumnTransformationCollection $columns, string $tableName) use ($schemaManager, $notices) {
 
-                $missingInConfig = collect($sourceColumns)->diff($columns->keys()->map(function($name) { return strtolower($name); }));
+                $sourceColumns = collect(array_keys($schemaManager->listTableDetails($tableName)->getColumns()));
+                $configColumns = $columns->keys()->map(function($name) { return strtolower($name); });
 
-                if ($missingInConfig->isNotEmpty()) {
-                    throw new Exception(
-                        "$tableName in database has columns which are not defined in config/dbmask: " . $missingInConfig->implode(', ')
-                    );
-                }
+                $missingInSchema = $configColumns->diff($sourceColumns);
+                $missingInConfig = $sourceColumns->diff($configColumns);
+
+                if ($missingInSchema->isNotEmpty()) $notices['Defined Columns Missing In DB Schema'] = $missingInSchema;
+                if ($missingInConfig->isNotEmpty()) $notices['Defined Columns Missing In DBMask Config'] = $missingInConfig;
             });
         }
+
+        return $notices;
+    }
+
+    public function missingTablesInConfig()
+    {
+
     }
 
     public function setFilters(array $filters) : void
