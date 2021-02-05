@@ -83,6 +83,8 @@ class DBMask
             $schema = $this->target->getDatabaseName();
             $this->log("creating $targetType <fg=green>$tableName</fg=green> in schema <fg=blue>$schema</fg=blue>");
 
+            $columnTransformations->forget((new SourceTable($this->source, $tableName))->getGeneratedColumns());
+
             $filter = data_get($this->filters, $tableName);
             $create = "create $targetType $schema.$tableName ";
             $select = "select {$this->getSelectExpression($columnTransformations, $schema)} from $tableName " . ($filter ? "where $filter; " : "; ");
