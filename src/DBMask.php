@@ -186,13 +186,22 @@ class DBMask
         if ($tablesMissingInConfig->isNotEmpty()) $notices['Defined Tables Missing In DBMask Config'] = $tablesMissingInConfig;
 
         if ($targetType === DBMask::TARGET_MATERIALIZE) {
-            $this->tables->each(function(ColumnTransformationCollection $columns, string $tableName) use ($schemaManager, $notices) {
+            $exemptedColumns = config('dbmask.column_exemptions');
+            $this->tables->each(function(ColumnTransformationCollection $columns, string $tableName) use ($schemaManager, $notices, $exemptedColumns) {
 
                 $sourceColumns = collect(array_keys($schemaManager->listTableDetails($tableName)->getColumns()));
                 $configColumns = $columns->keys()->map(function($name) { return strtolower($name); });
 
                 $missingInSchema = $configColumns->diff($sourceColumns);
                 $missingInConfig = $sourceColumns->diff($configColumns);
+
+                if (key_exists($tableName, $exemptedColumns)) {
+                    $columnExemptions = $exemptedColumns[$tableName];
+
+                    $missingInConfig = $missingInConfig->filter(function($missingColumn) use ($columnExemptions) {
+                        return (! in_array($missingColumn, $columnExemptions));
+                    });
+                }
 
                 if ($missingInSchema->isNotEmpty()) $notices['Defined Columns Missing In DB Schema'] = $missingInSchema;
                 if ($missingInConfig->isNotEmpty()) $notices['Defined Columns Missing In DBMask Config'] = $missingInConfig;

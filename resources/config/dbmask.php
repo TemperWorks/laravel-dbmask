@@ -15,6 +15,10 @@ return [
     'auto_include_pks' => false,
     'auto_include_timestamps' => ['created_at', 'updated_at'],
 
+    'column_exemptions' => [
+        // Format eg: 'your_table_name' => ['your_column_1', 'your_column_2'],
+    ],
+
     'tables' => [
         'users' => [
             'email' => "concat(first_name,'@example.com')",

@@ -115,6 +115,15 @@ artisan db:mask
 artisan db:materialize
 ```
 
+#### Exempting Columns (during config validation)
+
+If the schema contains read-only columns such as generated/stored column, you can exempt them from being checked.
+To do so, add them to the `column_exemptions` array in the following format:
+
+```php
+'users' => ['full_name'],
+```
+
 #### Filtering rows
 
 The `table_filters` array can optionally include rules for excluding specific rows: 
