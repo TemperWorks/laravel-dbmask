@@ -146,7 +146,7 @@ class DBMask
         $select = $columnTransformations->map(function($column, $key) use ($schema, $generated) {
             $column = Str::startsWith($column, 'mask_random_') ? $schema.'.'.$column : $column;
             $column = Str::startsWith($column, 'mask_bcrypt_') ? "'".bcrypt(Str::after($column,'mask_bcrypt_'))."'" : $column;
-            $column = $generated->contains($key) ? "default(`$column`)" : $column;
+            $column = $generated->contains($key) ? "default($column)" : $column;
             return "$column as `$key`";
         })->values()->implode(', ');
 
