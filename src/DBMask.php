@@ -83,11 +83,10 @@ class DBMask
             $schema = $this->target->getDatabaseName();
             $this->log("creating $targetType <fg=green>$tableName</fg=green> in schema <fg=blue>$schema</fg=blue>");
 
-            $columnTransformations->forget((new SourceTable($this->source, $tableName))->getGeneratedColumns());
-
             $filter = data_get($this->filters, $tableName);
             $create = "create $targetType $schema.$tableName ";
-            $select = "select {$this->getSelectExpression($columnTransformations, $schema)} from $tableName " . ($filter ? "where $filter; " : "; ");
+            $generated = (new SourceTable($this->source, $tableName))->getGeneratedColumns();
+            $select = "select {$this->getSelectExpression($columnTransformations, $generated, $schema)} from $tableName " . ($filter ? "where $filter; " : "; ");
 
             $this->source->statement(
                 ($targetType === 'view')
@@ -142,11 +141,12 @@ class DBMask
         return collect(range(1,$number))->map($function)->toArray();
     }
 
-    protected function getSelectExpression(Collection $columnTransformations, string $schema): string
+    protected function getSelectExpression(Collection $columnTransformations, Collection $generated, string $schema): string
     {
-        $select = $columnTransformations->map(function($column, $key) use ($schema) {
+        $select = $columnTransformations->map(function($column, $key) use ($schema, $generated) {
             $column = Str::startsWith($column, 'mask_random_') ? $schema.'.'.$column : $column;
             $column = Str::startsWith($column, 'mask_bcrypt_') ? "'".bcrypt(Str::after($column,'mask_bcrypt_'))."'" : $column;
+            $column = $generated->contains($key) ? "default(`$column`)" : $column;
             return "$column as `$key`";
         })->values()->implode(', ');
 
