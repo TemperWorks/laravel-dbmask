@@ -46,4 +46,11 @@ class SourceTable
                 return $include ? $carry->push($column->getName()) : $carry;
             }, new ColumnTransformationCollection());
     }
+    
+    public function getGeneratedColumns(): Collection
+    {
+        return collect($this->db
+            ->select("select column_name from information_schema.columns where TABLE_NAME = '$this->name' and length(GENERATION_EXPRESSION) > 0"))
+            ->pluck('column_name');
+    }
 }
