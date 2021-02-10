@@ -26,6 +26,8 @@
                 "TemperWorks\\DBMask\\DBMaskServiceProvider"
             ]
         }
+    },
+    "require-dev": {
+        "orchestra/testbench": "^6.12"
     }
 }
-

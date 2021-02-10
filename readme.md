@@ -31,6 +31,12 @@ Publish a sample config:
 php artisan vendor:publish --tag=dbmask
 ```
 
+### Testing
+
+This package needs a real MySQL database for testing.  
+Copy `phpunit.xml.dist` to `phpunit.xml`, and change the DB connection variables.  
+After that, just run `./vendor/bin/phpunit`.
+
 ## Usage
 
 ### About this package
