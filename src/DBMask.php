@@ -85,11 +85,11 @@ class DBMask
 
             $filter = data_get($this->filters, $tableName);
             $create = "create $targetType $schema.$tableName ";
-            $generated = (new SourceTable($this->source, $tableName))->getGeneratedColumns();
+            $generated = ($targetType === DBMask::TARGET_MATERIALIZE) ? (new SourceTable($this->source, $tableName))->getGeneratedColumns() : collect([]);
             $select = "select {$this->getSelectExpression($columnTransformations, $generated, $schema)} from $tableName " . ($filter ? "where $filter; " : "; ");
 
             $this->source->statement(
-                ($targetType === 'view')
+                ($targetType === DBMask::TARGET_MASK)
                     ? $create . ' as ' . $select
                     : "insert $schema.$tableName $select"
             );
