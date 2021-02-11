@@ -54,12 +54,6 @@ jobs:
                   composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
                   composer update --prefer-stable --prefer-dist --no-interaction --no-suggest
 
-            - name: Verify MySQL connection
-              run: |
-                  mysql --version
-                  sudo apt-get install -y mysql-client
-                  mysql --host 127.0.0.1 --port ${{ job.services.mysql.ports['3306'] }} -uroot -ptest -e "SHOW DATABASES"
-
             - name: Execute tests
               run: vendor/bin/phpunit
               env:
