@@ -42,7 +42,7 @@ abstract class TestCase extends Orchestra
 
         $db = env('DB_DATABASE_TARGET');
         DB::statement("drop database if exists `{$db}`");
-        DB::connection()->getSchemaBuilder()->createDatabase(env('DB_DATABASE_TARGET'));
+        DB::statement("create database {$db} default character set utf8 default collate utf8_unicode_ci");
 
         Config::set('database.connections.target', $connection + ['database' => env('DB_DATABASE_TARGET')]);
 
