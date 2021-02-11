@@ -43,15 +43,15 @@ class AnonymizationTest extends TestCase
         $this->mask();
         $this->materialize();
 
-        $sourceUser = $this->source->table('users')->find(1);
+        $sourceUser = $this->source->table('users')->first();
         $this->assertNotNull($sourceUser->email);
 
         // Both in the masked & materialized DB, the id and password are equal but the email is nulled
-        $anonimizedUser = $this->masked->table('users')->find(1);
+        $anonimizedUser = $this->masked->table('users')->find($sourceUser->id);
         $this->assertEquals($sourceUser->password, $anonimizedUser->password);
         $this->assertNull($anonimizedUser->email);
 
-        $anonimizedUser = $this->materialized->table('users')->find(1);
+        $anonimizedUser = $this->materialized->table('users')->find($sourceUser->id);
         $this->assertEquals($sourceUser->password, $anonimizedUser->password);
         $this->assertNull($anonimizedUser->email);
 
