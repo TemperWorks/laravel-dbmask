@@ -40,7 +40,8 @@ abstract class TestCase extends Orchestra
 
         Schema::dropAllTables();
 
-        DB::connection()->getSchemaBuilder()->dropDatabaseIfExists(env('DB_DATABASE_TARGET'));
+        $db = env('DB_DATABASE_TARGET');
+        DB::statement("DROP DATABASE `{$db}`");
         DB::connection()->getSchemaBuilder()->createDatabase(env('DB_DATABASE_TARGET'));
 
         Config::set('database.connections.target', $connection + ['database' => env('DB_DATABASE_TARGET')]);
