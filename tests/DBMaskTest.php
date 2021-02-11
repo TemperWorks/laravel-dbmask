@@ -37,10 +37,10 @@ class DBMaskTest extends TestCase
         $dbmask = new DBMask($this->source, $this->target);
         $dbmask->mask();
 
-//        $views = collect(DB::connection('target')->select("show full tables where table_type like 'VIEW';"))->first();
-//
-//        $this->assertEquals('users', $views->Tables_in_target);
-//        $this->assertEquals('VIEW', $views->Table_type);
+        $views = collect(DB::connection('target')->select("show full tables where table_type like 'VIEW';"))->first();
+
+        $this->assertEquals('users', $views->Tables_in_target);
+        $this->assertEquals('VIEW', $views->Table_type);
     }
 
     public function test_it_materializes()
@@ -48,10 +48,10 @@ class DBMaskTest extends TestCase
         $dbmask = new DBMask($this->source, $this->target);
         $dbmask->materialize();
 
-//        $views = collect(DB::connection('target')->select("show full tables where table_type like 'BASE TABLE';"))->first();
-//
-//        $this->assertEquals('users', $views->Tables_in_target);
-//        $this->assertEquals('BASE TABLE', $views->Table_type);
+        $views = collect(DB::connection('target')->select("show full tables where table_type like 'BASE TABLE';"))->first();
+
+        $this->assertEquals('users', $views->Tables_in_target);
+        $this->assertEquals('BASE TABLE', $views->Table_type);
     }
 
 

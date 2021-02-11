@@ -30,11 +30,14 @@ abstract class TestCase extends Orchestra
             'password' => env('DB_PASSWORD'),
             'charset' => 'utf8',
             'collation' => 'utf8_unicode_ci',
+            'port' => env('DB_PORT')
         ];
 
         Config::set('database.connections.source', $connection + ['database' => env('DB_DATABASE_SOURCE')]);
 
         DB::setDefaultConnection('source');
+        DB::reconnect();
+
         Schema::dropAllTables();
 
         DB::connection()->getSchemaBuilder()->dropDatabaseIfExists(env('DB_DATABASE_TARGET'));
