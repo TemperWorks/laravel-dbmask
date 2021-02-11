@@ -4,9 +4,11 @@ declare(strict_types=1);
 namespace TemperWorks\DBMask\Tests;
 
 use Config;
+use Hash;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Schema;
+use TemperWorks\DBMask\DBMask;
 
 class AnonymizationTest extends TestCase
 {
@@ -61,5 +63,26 @@ class AnonymizationTest extends TestCase
         // The index on the materialized DB has decreased in cardinality because all fields are nulled
         $this->assertEquals(2, $this->source->selectOne("show index from users where Key_name = 'users_email_index'")->Cardinality);
         $this->assertEquals(1, $this->materialized->selectOne("show index from users where Key_name = 'users_email_index'")->Cardinality);
+    }
+
+    public function test_it_bcrypts_values()
+    {
+        Config::set('dbmask.tables.users', ['id', 'email', 'password' => DBMask::bcrypt('secret')]);
+
+        $this->mask();
+        $this->materialize();
+
+        $sourceUser = $this->source->table('users')
+            ->where('email', 'bob@example.com')
+            ->first();
+
+        $this->assertNotNull($sourceUser);
+
+        // Both in the masked & materialized DB, the password is set to the bcrypt hash of 'secret'
+        $anonimizedUser = $this->masked->table('users')->find($sourceUser->id);
+        $this->assertTrue(Hash::check('secret', $anonimizedUser->password));
+
+        $anonimizedUser = $this->materialized->table('users')->find($sourceUser->id);
+        $this->assertTrue(Hash::check('secret', $anonimizedUser->password));
     }
 }
