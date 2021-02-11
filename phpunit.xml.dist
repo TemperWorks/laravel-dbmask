@@ -19,7 +19,8 @@
         <env name="DB_USERNAME" value="root"/>
         <env name="DB_PASSWORD" value="test"/>
         <env name="DB_DATABASE_SOURCE" value="source"/>
-        <env name="DB_DATABASE_TARGET" value="target"/>
+        <env name="DB_DATABASE_MASKTARGET" value="masked"/>
+        <env name="DB_DATABASE_MATERIALIZETARGET" value="materialized"/>
         <env name="DB_HOST" value="127.0.0.1" />
         <env name="DB_PORT" value="3306" />
     </php>

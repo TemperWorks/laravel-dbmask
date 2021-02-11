@@ -14,12 +14,10 @@ class DBMask
     const TARGET_MATERIALIZE = 'table';
     const TARGET_MASK = 'view';
 
-    protected $command;
-    protected $tables;
-    /** @var Connection $source */
-    protected $source;
-    /** @var Connection $target */
-    protected $target;
+    protected ?Command $command;
+    protected Collection $tables;
+    protected Connection $source;
+    protected ?Connection $target;
 
     /** @var array */
     protected $filters = [];
