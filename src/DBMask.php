@@ -39,10 +39,7 @@ class DBMask
 
                 return $columnTransformations
                     ->mergeWhen((bool) config('dbmask.auto_include_pks'),
-                        $sourceTable
-                            ->getPKColumns()
-                            ->keys()
-                            ->diff($columnTransformations->keys()))
+                        $sourceTable->getPKColumns()->diff($columnTransformations->keys()))
                     ->mergeWhen(config('dbmask.auto_include_timestamps') !== null,
                         $sourceTable->getTimestampColumns()->diff($columnTransformations->keys()))
                     ->populateKeys()

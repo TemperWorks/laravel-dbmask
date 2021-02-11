@@ -34,7 +34,9 @@ class SourceTable
 
     public function getColumnOrdinalPositions(): Collection
     {
-        return collect($this->db->getSchemaBuilder()->getColumnListing($this->table->getName()));
+        $schemaName = $this->db->getDatabaseName();
+        $orderedcolumns = $this->db->select("select column_name from information_schema.columns where table_schema = '$schemaName' and table_name = 'users' order by ordinal_position");
+        return collect($orderedcolumns)->pluck('column_name');
     }
 
     public function getTimestampColumns(): ColumnTransformationCollection
@@ -46,7 +48,7 @@ class SourceTable
                 return $include ? $carry->push($column->getName()) : $carry;
             }, new ColumnTransformationCollection());
     }
-    
+
     public function getGeneratedColumns(): Collection
     {
         return collect($this->db

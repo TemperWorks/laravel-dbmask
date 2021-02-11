@@ -21,6 +21,7 @@ abstract class TestCase extends Orchestra
 
         Config::set('dbmask.masking', ['source' => 'source', 'target' => 'masked']);
         Config::set('dbmask.materializing', ['source' => 'source', 'target' => 'materialized']);
+        Config::set('dbmask.auto_include_pks', true);
 
         $this->source = DB::connection('source');
         $this->masked = DB::connection('masked');
@@ -39,7 +40,9 @@ abstract class TestCase extends Orchestra
             'host' => env('DB_HOST'),
             'username' => env('DB_USERNAME'),
             'password' => env('DB_PASSWORD'),
-            'port' => env('DB_PORT')
+            'port' => env('DB_PORT'),
+            'charset' => 'utf8',
+            'collation' => 'utf8_unicode_ci',
         ];
 
         Config::set('database.connections.source', $connection + ['database' => env('DB_DATABASE_SOURCE')]);
