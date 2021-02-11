@@ -1,10 +1,22 @@
 ## DBMask
 
-An experimental Laravel Package for whitelisted Dynamic Database Masking.
+A Laravel Package for whitelisted Dynamic Database Masking.
 
-**DISCLAIMER: This package is currently considered to be in an Alpha state. There are no guarantees it will work correctly. Be sure to verify and audit the code yourself before using it, and create backups to guarantee the safety of your data.**
+Have you ever wondered:
 
-Feedback and contributions are welcome.
+> "How can I share our database with developers and analysts within the company, while also complying with privacy laws like GDPR?
+
+This package might be for you!
+
+To a certain degree, databases seeding scripts can be of help. But sometimes having access to real data or having a recent copy of the database can be essential to many roles within a company, for example to quickly gather real world statistics or to hunt down a bug.
+
+This package can both create a **read-only real-time filter** (Mask through views) and/or a **read/write filtered copy** (Materialized tables) from a MySQL source connection.
+
+To maintain "privacy by default", it works by whitelisting rather than blacklisting data. You explicitly specify which columns you want copied verbatim, which columns you want to anonymize, and which columns (and rows) to completely exclude.
+
+**DISCLAIMER: This package contains code which can delete important data from your database when set up incorrectly. Be sure to verify and audit the code yourself before using it, and create backups to guarantee the safety of your production environment.**
+
+Contributions are always welcome.
 
 ## Installation
 
@@ -33,7 +45,9 @@ php artisan vendor:publish --tag=dbmask
 
 ### Testing
 
-This package needs a real MySQL database for testing.  
+This package needs a real MySQL database for testing. 
+Make sure you use a database which doesn't contain any important data when testing.
+
 Copy `phpunit.xml.dist` to `phpunit.xml`, and change the DB connection variables.  
 After that, just run `./vendor/bin/phpunit`.
 
@@ -57,25 +71,13 @@ create table users
 )
 ```
 
-A data scientist might request a copy of this production database, and they might be interested in aggregates such as `favorite_drink` per age group. The problem is that by granting access to the production database, you'll also give them access to database columns containing `social_security_number` and (a hopefully hashed) `password` string.
+A data scientist might request a copy of this production database, and they might be interested in aggregates such as `favorite_drink` per age group. The problem is that by granting access to the production database, you'll also give them access to database columns containing `social_security_number` and (hashed) `password` string.
 
 This is undesirable, as it increases the risk of personal data leaks.
 
-This can be remedied by creating a schema `anonimized`, granting access to the right people, and adding views with explicitly whitelisted columns as follows:
+A better solution is to provide a copy (or real-time filter) which masks sensitive fields, for example by setting values to `null`, or replacing values with fake data.
 
-```mysql
-create view anonimized.users as
-  select id, birthdate, favorite_drink
-  from production.users
-```
-
-This view behaves a lot like a filtered table. All select queries to the view pass through the `select` filter, onwards to the production database. 
-
-Writing hundreds of `create view` statements, and running them manually each time you update your database isn't feasible though, and that's where this package offers a solution.
-
-### Live masked views & Materialized indexed masked views
-
-This package generates and runs all required the queries for you.
+### Live masked views & Materialized masked tables
 
 #### Configuration
 
@@ -83,12 +85,12 @@ The `dbmask.php` config specifies the following config keys:
 
 |key|type|description|
 |---|---|---|
-|`tables`|`[]`|An array of tables with their columns. Omitted tables will not be included in the schema, omitted columns will not be included in the views.|
+|`tables`|`[]`|An array of tables with their columns. Omitted tables will not be included in the masked database.|
 |`table_filters`|`[]`|Which rows to filter|
 |`masking`|`array`|Contains two Database Connection names: a `source` and a `target`|
 |`materializing`|`array`|Contains two Database Connection names: a `source` and a `target`|
-|`auto_include_fks`| `bool`| whether to include foreign keys by default|
-|`auto_include_pks`| `bool`| whether to include primary keys by default|
+|`auto_include_fks`| `bool`| whether to include all foreign keys by default|
+|`auto_include_pks`| `bool`| whether to include all primary keys by default|
 |`auto_include_timestamps`| `bool` or `[]`| whether to include timestamps by default, optionally with array of column names|
 |`connection`| `string`| Which DB connection to use, if it's not the default one |
 |`mask_datasets`|`[]`| Datasets which can be used for randomized masking |
@@ -104,10 +106,11 @@ The `tables` array includes all the column transformations:
     'birth_date',
     // Sets the column to null
     'first_name' => 'null'
-    // Picks a semi-random English last name from a dataset, 
+    // Picks a stable, semi-random English last name from a dataset, 
     // using the last_name column as a hash seed
     'last_name' => DBMask::random('last_name', 'english_last_names'),
-    // Uses the application key to generate a password hash 
+    // Uses the application key to replace the value with a new generated password hash
+    // In this case, all users end up with their password set to the bcrypt hashed value of `secret`.
     'password' => DBMask::bcrypt('secret'),
 ]
 ```
@@ -117,13 +120,14 @@ The `tables` array includes all the column transformations:
 After publishing and editing the config, create the desired schemas in MySQL, edit the config, and run:
 
 ```
-artisan db:mask
-artisan db:materialize
+php artisan db:mask
+and/or
+php artisan db:materialize
 ```
 
 #### Filtering rows
 
-The `table_filters` array can optionally include rules for excluding specific rows: 
+The `table_filters` array can optionally contain rules for excluding specific rows: 
 
 ```php
 // exclude records of people born after 2000
@@ -153,4 +157,7 @@ $faker = Faker\Factory::create('nl_NL');
 ]
 ```
 
-There currently are some limitations though: It's difficult to guarantee uniqueness with smaller sets, and very large datasets affect performance negatively in views.
+There currently are some limitations to using fake seeded data though: 
+
+* It's impossible to guarantee uniqueness with a set which is smaller than the amount of table records
+* Very large datasets affect performance negatively in views.
