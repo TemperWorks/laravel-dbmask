@@ -27,12 +27,12 @@ class AnonymizationTest extends TestCase
 
         $user = $model();
         $user->email = 'bob@example.com';
-        $user->password = 'password';
+        $user->password = 'plaintext1';
         $user->save();
 
         $user = $model();
         $user->email = 'alice@example.com';
-        $user->password = 'password';
+        $user->password = 'plaintext2';
         $user->save();
     }
 
@@ -43,16 +43,16 @@ class AnonymizationTest extends TestCase
         $this->mask();
         $this->materialize();
 
-        $sourceUser = $this->source->table('users')->first();
+        $sourceUser = $this->source->table('users')->find(1);
         $this->assertNotNull($sourceUser->email);
 
-        // Both in the masked & materialized DB, the id is equal but the email is nulled
-        $anonimizedUser = $this->masked->table('users')->first();
-        $this->assertEquals($sourceUser->id, $anonimizedUser->id);
+        // Both in the masked & materialized DB, the id and password are equal but the email is nulled
+        $anonimizedUser = $this->masked->table('users')->find(1);
+        $this->assertEquals($sourceUser->password, $anonimizedUser->password);
         $this->assertNull($anonimizedUser->email);
 
-        $anonimizedUser = $this->materialized->table('users')->first();
-        $this->assertEquals($sourceUser->id, $anonimizedUser->id);
+        $anonimizedUser = $this->materialized->table('users')->find(1);
+        $this->assertEquals($sourceUser->password, $anonimizedUser->password);
         $this->assertNull($anonimizedUser->email);
 
         // The index on the materialized DB has decreased in cardinality because all fields are nulled
