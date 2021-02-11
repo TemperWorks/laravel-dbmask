@@ -2,6 +2,7 @@
 
 namespace TemperWorks\DBMask;
 
+use Config;
 use Exception;
 use Illuminate\Console\Command;
 use Illuminate\Database\Connection;
@@ -40,7 +41,10 @@ class DBMask
 
                 return $columnTransformations
                     ->mergeWhen((bool) config('dbmask.auto_include_pks'),
-                        $sourceTable->getPKColumns()->diff($columnTransformations->keys()))
+                        $sourceTable
+                            ->getPKColumns()
+                            ->keys()
+                            ->diff($columnTransformations->keys()))
                     ->mergeWhen(config('dbmask.auto_include_timestamps') !== null,
                         $sourceTable->getTimestampColumns()->diff($columnTransformations->keys()))
                     ->populateKeys()
@@ -160,7 +164,9 @@ class DBMask
 
     protected function registerMysqlFunctions(): void
     {
-        collect(config('dbmask')['mask_datasets'])
+        if (!Config::has('dbmask.mask_datasets')) return;
+
+        collect(Config::get('dbmask.mask_datasets'))
             ->each(function($dataset, $setname) {
                 $schema = $this->target->getDatabaseName();
                 $this->target->unprepared(
