@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Schema;
 
 class DBMask
 {
@@ -125,9 +126,9 @@ class DBMask
         );
     }
 
-    public static function random(string $source, string $function): string
+    public static function random(string $seed, string $function): string
     {
-        return "mask_random_$function($source)";
+        return "mask_random_$function($seed)";
     }
 
     public static function bcrypt(string $plaintext): string
