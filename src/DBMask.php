@@ -8,7 +8,6 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use Schema;
 
 class DBMask
 {
@@ -162,17 +161,22 @@ class DBMask
     {
         if (!Config::has('dbmask.mask_datasets')) return;
 
-        collect(Config::get('dbmask.mask_datasets'))
-            ->each(function($dataset, $setname) {
-                $schema = $this->target->getDatabaseName();
-                $this->target->unprepared(
-                    "drop function if exists $schema.mask_random_$setname;".
-                    "create function $schema.mask_random_$setname(seed varchar(255) charset utf8) returns varchar(255) deterministic return elt(".
-                        "mod(conv(substring(cast(sha(seed) as char),1,16),16,10)," . count($dataset) . "-1)+1, ".
-                        collect($dataset)->map(function($item){ return '"'.$item.'"'; })->implode(', ').
-                    ");"
-                );
-            });
+        collect(Config::get('dbmask.mask_datasets', []))
+            ->each(fn($data, $name) => $this->registerMysqlFunction($name, $data));
+    }
+
+    protected function registerMysqlFunction(string $setname, array $dataset): void
+    {
+        $dataset = collect($dataset);
+        $items = $dataset->map(fn($v) => '"'.$v.'"')->implode(', ');
+        $size = $dataset->count();
+
+        $schema = $this->target->getDatabaseName();
+        $this->target->unprepared(
+            "drop function if exists $schema.mask_random_$setname;".
+            "create function $schema.mask_random_$setname(seed varchar(255) charset utf8) returns varchar(255) deterministic return ".
+            "elt(mod(conv(substring(cast(sha(seed) as char),1,16),16,10), $size-1) + 1, $items);"
+        );
     }
 
     public function validateConfig(string $targetType): Collection
