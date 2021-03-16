@@ -130,10 +130,10 @@ class DBMask
         return "mask_random_$function($seed)";
     }
 
+
     public static function bcrypt(string $plaintext): string
     {
-        $hash = bcrypt($plaintext);
-        return "'$hash'";
+        return "mask_bcrypt_$plaintext";
     }
 
     public static function generate(int $number, callable $function): array
@@ -145,6 +145,7 @@ class DBMask
     {
         $select = $columnTransformations->map(function($column, $key) use ($schema, $generated) {
             $column = Str::startsWith($column, 'mask_random_') ? $schema.'.'.$column : $column;
+            $column = Str::startsWith($column, 'mask_bcrypt_') ? "'".bcrypt(Str::after($column,'mask_bcrypt_'))."'" : $column;
             $column = $generated->contains($key) ? "default($column)" : $column;
             return "$column as `$key`";
         })->values()->implode(', ');
