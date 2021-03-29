@@ -34,11 +34,12 @@ class SourceTable
 
     public function getColumnOrdinalPositions(): Collection
     {
-        if (Comparator::lessThan($this->getMySQLVersion(), '8.0.0'))
+        if (Comparator::lessThan($this->getMySQLVersion(), '8.0.0')) {
             return collect($this->db->getSchemaBuilder()->getColumnListing($this->table->getName()));
+        }
 
         $schemaName = $this->db->getDatabaseName();
-        $orderedcolumns = $this->db->select("select column_name from information_schema.columns where table_schema = '$schemaName' and table_name = 'users' order by ordinal_position");
+        $orderedcolumns = $this->db->select("select column_name from information_schema.columns where table_schema = '$schemaName' and table_name = '$this->name' order by ordinal_position");
         return collect($orderedcolumns)->pluck('column_name');
     }
 
