@@ -20,6 +20,8 @@ class SourceTableTest extends TestCase
 
         $sourceTable = new SourceTable($this->source, 'table');
 
+        dump($sourceTable->getMySQLVersion());
+
         $this->assertEquals(['id'], $sourceTable->getPKColumns()->toArray());
         $this->assertEquals(['created_at', 'updated_at'], $sourceTable->getTimestampColumns()->toArray());
         $this->assertEquals(['id', 'created_at', 'updated_at'], $sourceTable->getColumnOrdinalPositions()->toArray());
