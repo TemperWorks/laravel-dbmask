@@ -34,8 +34,8 @@ class SourceTable
     public function getColumnOrdinalPositions(): Collection
     {
         $schemaName = $this->db->getDatabaseName();
-        $orderedcolumns = $this->db->select("select column_name from information_schema.columns where table_schema = '$schemaName' and table_name = '$this->name' order by ordinal_position");
-        return collect($orderedcolumns)->pluck('column_name');
+        $orderedcolumns = $this->db->select("select column_name as `name` from information_schema.columns where table_schema = '$schemaName' and table_name = '$this->name' order by ordinal_position");
+        return collect($orderedcolumns)->pluck('name');
     }
 
     public function getTimestampColumns(): ColumnTransformationCollection
@@ -51,7 +51,7 @@ class SourceTable
     public function getGeneratedColumns(): Collection
     {
         return collect($this->db
-            ->select("select column_name from information_schema.columns where TABLE_NAME = '$this->name' and length(GENERATION_EXPRESSION) > 0"))
-            ->pluck('column_name');
+            ->select("select column_name as `name` from information_schema.columns where TABLE_NAME = '$this->name' and length(GENERATION_EXPRESSION) > 0"))
+            ->pluck('name');
     }
 }

@@ -20,10 +20,6 @@ class SourceTableTest extends TestCase
 
         $sourceTable = new SourceTable($this->source, 'table');
 
-        $schemaName = $this->source->getDatabaseName();
-        dump($orderedcolumns = $this->source->select("select column_name from information_schema.columns where table_schema = '$schemaName' and table_name = '$sourceTable->name' order by ordinal_position"));
-        dump(collect($orderedcolumns)->pluck('column_name'));
-
         $this->assertEquals(['id'], $sourceTable->getPKColumns()->toArray());
         $this->assertEquals(['created_at', 'updated_at'], $sourceTable->getTimestampColumns()->toArray());
         $this->assertEquals(['id', 'created_at', 'updated_at'], $sourceTable->getColumnOrdinalPositions()->toArray());
