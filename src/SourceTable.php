@@ -2,7 +2,6 @@
 
 namespace TemperWorks\DBMask;
 
-use Composer\Semver\Comparator;
 use Doctrine\DBAL\Schema\Column;
 use Doctrine\DBAL\Types\DateTimeType;
 use Exception;
@@ -34,10 +33,6 @@ class SourceTable
 
     public function getColumnOrdinalPositions(): Collection
     {
-        if (Comparator::lessThan($this->getMySQLVersion(), '8.0.0')) {
-            return collect($this->db->getSchemaBuilder()->getColumnListing($this->table->getName()));
-        }
-
         $schemaName = $this->db->getDatabaseName();
         $orderedcolumns = $this->db->select("select column_name from information_schema.columns where table_schema = '$schemaName' and table_name = '$this->name' order by ordinal_position");
         return collect($orderedcolumns)->pluck('column_name');
@@ -58,10 +53,5 @@ class SourceTable
         return collect($this->db
             ->select("select column_name from information_schema.columns where TABLE_NAME = '$this->name' and length(GENERATION_EXPRESSION) > 0"))
             ->pluck('column_name');
-    }
-
-    public function getMySQLVersion()
-    {
-        return $this->db->select( "select version()")[0]->{'version()'};
     }
 }
