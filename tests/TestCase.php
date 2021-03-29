@@ -22,6 +22,7 @@ abstract class TestCase extends Orchestra
         Config::set('dbmask.masking', ['source' => 'source', 'target' => 'masked']);
         Config::set('dbmask.materializing', ['source' => 'source', 'target' => 'materialized']);
         Config::set('dbmask.auto_include_pks', true);
+        Config::set('dbmask.auto_include_timestamps', ['created_at', 'updated_at', 'deleted_at', 'archived_at']);
 
         $this->source = DB::connection('source');
         $this->masked = DB::connection('masked');

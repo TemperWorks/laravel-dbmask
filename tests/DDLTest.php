@@ -4,10 +4,8 @@ declare(strict_types=1);
 namespace TemperWorks\DBMask\Tests;
 
 use Config;
-use DB;
 use Illuminate\Database\Schema\Blueprint;
 use Schema;
-use TemperWorks\DBMask\DBMask;
 
 class DDLTest extends TestCase
 {
