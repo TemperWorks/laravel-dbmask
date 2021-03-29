@@ -70,10 +70,10 @@ class SourceTableTest extends TestCase
 
         $record = collect($this->masked->table('unordered_table')->first());
         $this->assertEquals(['created_at', 'updated_at', 'foo', 'id'], $record->keys()->toArray());
-        $this->assertEquals(['test', 1], $record->skip(2)->values()->toArray());
+        $this->assertEquals(['test', 1], $record->slice(2)->values()->toArray());
 
         $record = collect($this->materialized->table('unordered_table')->first());
         $this->assertEquals(['created_at', 'updated_at', 'foo', 'id'], $record->keys()->toArray());
-        $this->assertEquals(['test', 1], $record->skip(2)->values()->toArray());
+        $this->assertEquals(['test', 1], $record->slice(2)->values()->toArray());
     }
 }
