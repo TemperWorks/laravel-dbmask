@@ -10,7 +10,7 @@ jobs:
             fail-fast: false
             matrix:
                 php: [8.0, 7.4]
-                laravel: [8.*, 7.*, 6.*, 5.8.*]
+                laravel: [8.*, 7.*, 6.*]
                 mysql: [5.7, 8.0]
                 os: [ubuntu-latest]
                 include:
@@ -20,15 +20,9 @@ jobs:
                       testbench: 5.*
                     - laravel: 6.*
                       testbench: 4.*
-                    - laravel: 5.8.*
-                      testbench: 3.8.*
                 exclude:
-                    - laravel: 5.8.*
-                      php: 8.0
                     - laravel: 6.*
                       php: 8.0
-                    - laravel: 5.8.*
-                      mysql: 8.0
         steps:
             - name: Checkout code
               uses: actions/checkout@v1
