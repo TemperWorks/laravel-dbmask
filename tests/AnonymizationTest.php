@@ -142,7 +142,7 @@ class AnonymizationTest extends TestCase
     {
         $this->source->statement("create view users_view as select id, upper(email) as email, password from users");
 
-        // We're not testing the regular table
+        // Anonimization happens in the regular table
         Config::set('dbmask.tables.users', [
             'id',
             'email' => 'concat("user_", id, "@example.com")',
@@ -150,18 +150,13 @@ class AnonymizationTest extends TestCase
         ]);
 
         // Anonymize the source view
-        Config::set('dbmask.tables.users_view', [
-            'id',
-            'email',
-            'password'
-        ]);
+        Config::set('dbmask.tables.users_view');
 
         $this->mask();
         $this->materialize();
 
-        // Both in the masked & materialized DB, bob's email stays null while alice's email is masked
         $anonimizedUsers = $this->masked->table('users_view')->get();
-        $this->assertEquals('BOB@EXAMPLE.COM', $anonimizedUsers->firstWhere('password', 'plaintext1')->email);
+        $this->assertEquals('USER_1@EXAMPLE.COM', $anonimizedUsers->firstWhere('password', 'plaintext1')->email);
 
         $anonimizedUsers = $this->materialized->table('users_view')->get();
         $this->assertEquals('USER_1@EXAMPLE.COM', $anonimizedUsers->firstWhere('password', 'plaintext1')->email);

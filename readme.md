@@ -22,11 +22,9 @@ Contributions are always welcome.
 
 The following MySQL features can cause issues:
 
-* **Virtual or stored generated columns** can leak data when creating masked views.
-* **MySQL views** which are present in the source schema might leak data when creating masked views.
-
-Do not include generated columns or source views which expose sensitive information in your masking configuration, or use the materialization option, if this is an issue.
-These shortcomings might be addressed in a future version.
+* **Virtual or stored generated columns** can leak data when creating masked views. Use the materialization option if this is an issue.
+* **Triggers & UDFs** from the source schema are currently not transferred to the target.
+* **Views** from the source schema will be present on the targets, but should rely on masking configuration of underlying tables.
 
 ## Installation
 
@@ -164,6 +162,27 @@ $faker = Faker\Factory::create('nl_NL');
     'ssn' => DBMask::generate(100, function() use ($faker) {
         return $faker->unique()->idNumber;
     }),
+]
+```
+
+#### Transferring views from source to target
+
+If views exist on the source schema, these can be transferred to the masked/materialized targets as well.
+
+For example, if the source has a `users_view` which concatenates first & last name into fullname, and exposes a SSN, then define the anonymization config for the table.
+Include the view name as well, without any column configuration -- It doesn't have any realy columns after all, it will just point at the anonymized users table.
+
+This works the same when using the live masked anonymization option. In that case, the view from the source will be transferred to the target, where it is layered on top of the masking view. 
+
+```php
+'tables' => [
+    'users' => [
+        'first_name' => "'Jane'"
+        'last_name' => "'Doe'"
+        'social_security_num' => DBMask::random('social_security_num', 'ssn')
+    ],
+    
+    'users_view' => [],
 ]
 ```
 

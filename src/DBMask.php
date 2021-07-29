@@ -33,9 +33,9 @@ class DBMask
             ->registerDoctrineTypeMapping('enum', 'string');
 
         $this->tables = collect(config('dbmask')['tables'])
-            ->map(function(array $columnTransformations, string $tableName) {
+            ->map(function(?array $columnTransformations, string $tableName) {
                 $sourceTable = new SourceTable($this->source, $tableName);
-                $columnTransformations = new ColumnTransformationCollection($columnTransformations);
+                $columnTransformations = new ColumnTransformationCollection($columnTransformations ?? []);
 
                 return $columnTransformations
                     ->mergeWhen((bool) config('dbmask.auto_include_pks'),
@@ -53,7 +53,23 @@ class DBMask
         if ($validation->except('Defined Tables Missing In DBMask Config')->isNotEmpty())
             throw new Exception($validation->toJson(JSON_PRETTY_PRINT));
 
+        $sourceViews = Collect([]);
+
+        $this->tables = $this->tables->filter(function(ColumnTransformationCollection $columnTransformations, string $tableName) use ($sourceViews) {
+            $ddl = $this->source->select("show create table $tableName")[0];
+            // If source table is a view, prepare to create an identical view on target after table transforms are done.
+            if (isset($ddl->{'Create View'})) {
+                $sourceViews->push($ddl->{'Create View'});
+            }
+            // Only keep source tables, for source views, we are done.
+            return (isset($ddl->{'Create Table'}));
+        });
+
         $this->transformTables(DBMask::TARGET_MASK);
+
+        $sourceViews->each(function(string $statement) {
+            $this->target->statement($statement);
+        });
     }
 
     public function materialize(): void
@@ -188,17 +204,23 @@ class DBMask
         $notices = collect();
         $schemaManager = $this->source->getDoctrineSchemaManager();
 
-        $sourceTables = collect($schemaManager->listTableNames())->merge(array_keys($schemaManager->listViews()));
+        $sourceTables = collect($schemaManager->listTableNames());
+        $sourceViews = collect(array_keys($schemaManager->listViews()));
+        $sourceTablesAndViews = $sourceTables->merge($sourceViews);
         $configTables = $this->tables->keys();
 
-        $tablesMissingInSchema = $configTables->diff($sourceTables);
-        $tablesMissingInConfig = $sourceTables->diff($configTables);
+        $tablesMissingInSchema = $configTables->diff($sourceTablesAndViews);
+        $tablesMissingInConfig = $sourceTablesAndViews->diff($configTables);
 
         if ($tablesMissingInSchema->isNotEmpty()) $notices['Defined Tables Missing In DB Schema'] = $tablesMissingInSchema;
         if ($tablesMissingInConfig->isNotEmpty()) $notices['Defined Tables Missing In DBMask Config'] = $tablesMissingInConfig;
 
         if ($targetType === DBMask::TARGET_MATERIALIZE) {
-            $this->tables->each(function(ColumnTransformationCollection $columns, string $tableName) use ($schemaManager, $notices) {
+            $this->tables
+                ->filter(function(string $tableName) use ($sourceTables) {
+                    return $sourceTables->contains($tableName);
+                })
+                ->each(function(ColumnTransformationCollection $columns, string $tableName) use ($schemaManager, $notices) {
 
                 $sourceColumns = collect(array_keys($schemaManager->listTableDetails($tableName)->getColumns()));
                 $configColumns = $columns->keys()->map(function($name) { return strtolower($name); });
