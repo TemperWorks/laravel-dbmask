@@ -52,6 +52,7 @@ abstract class TestCase extends Orchestra
         DB::reconnect();
 
         Schema::dropAllTables();
+        Schema::dropAllViews();
 
         $db = env('DB_DATABASE_MASKTARGET');
         DB::statement("drop database if exists `{$db}`");

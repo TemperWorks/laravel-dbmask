@@ -110,4 +110,60 @@ class AnonymizationTest extends TestCase
         $this->assertEquals(null, $anonimizedUsers->firstWhere('password', 'plaintext1')->email);
         $this->assertEquals('user_2@example.com', $anonimizedUsers->firstWhere('password', 'plaintext2')->email);
     }
+
+    public function test_it_partially_anonymizes_generated_columns()
+    {
+        Schema::table('users', function(Blueprint $table) {
+            $table->string('email_uppercase_generated')
+                ->storedAs('upper(email)');
+        });
+
+        Config::set('dbmask.tables.users', [
+            'id',
+            'email' => 'concat("user_", id, "@example.com")',
+            'email_uppercase_generated',
+            'password'
+        ]);
+
+        $this->mask();
+        $this->materialize();
+
+        // Both in the masked & materialized DB, bob's email stays null while alice's email is masked
+        $anonimizedUsers = $this->masked->table('users')->get();
+        $this->assertEquals('user_1@example.com', $anonimizedUsers->firstWhere('password', 'plaintext1')->email);
+        $this->assertEquals('BOB@EXAMPLE.COM', $anonimizedUsers->firstWhere('password', 'plaintext1')->email_uppercase_generated);
+
+        $anonimizedUsers = $this->materialized->table('users')->get();
+        $this->assertEquals('user_1@example.com', $anonimizedUsers->firstWhere('password', 'plaintext1')->email);
+        $this->assertEquals('USER_1@EXAMPLE.COM', $anonimizedUsers->firstWhere('password', 'plaintext1')->email_uppercase_generated);
+    }
+
+    public function test_it_anonymizes_views()
+    {
+        $this->source->statement("create view users_view as select id, upper(email) as email, password from users");
+
+        // We're not testing the regular table
+        Config::set('dbmask.tables.users', [
+            'id',
+            'email' => 'concat("user_", id, "@example.com")',
+            'password'
+        ]);
+
+        // Anonymize the source view
+        Config::set('dbmask.tables.users_view', [
+            'id',
+            'email',
+            'password'
+        ]);
+
+        $this->mask();
+        $this->materialize();
+
+        // Both in the masked & materialized DB, bob's email stays null while alice's email is masked
+        $anonimizedUsers = $this->masked->table('users_view')->get();
+        $this->assertEquals('BOB@EXAMPLE.COM', $anonimizedUsers->firstWhere('password', 'plaintext1')->email);
+
+        $anonimizedUsers = $this->materialized->table('users_view')->get();
+        $this->assertEquals('USER_1@EXAMPLE.COM', $anonimizedUsers->firstWhere('password', 'plaintext1')->email);
+    }
 }

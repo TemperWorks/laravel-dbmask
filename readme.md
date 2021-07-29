@@ -18,6 +18,16 @@ To maintain "privacy by default", it works by whitelisting rather than blacklist
 
 Contributions are always welcome.
 
+## Important Limitations
+
+The following MySQL features can cause issues:
+
+* **Virtual or stored generated columns** can leak data when creating masked views.
+* **MySQL views** which are present in the source schema might leak data when creating masked views.
+
+Do not include generated columns or source views which expose sensitive information in your masking configuration, or use the materialization option, if this is an issue.
+These shortcomings might be addressed in a future version.
+
 ## Installation
 
 Add the repository:

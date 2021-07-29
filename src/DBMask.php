@@ -64,9 +64,11 @@ class DBMask
 
         // Prepare table structure for materialized views
         $this->target->getSchemaBuilder()->disableForeignKeyConstraints();
-        $this->tables->each(function($_, string $tableName) {
-            $ddl = $this->source->select("show create table $tableName")[0]->{'Create Table'};
-            $this->target->statement($ddl);
+        $this->tables = $this->tables->filter(function(ColumnTransformationCollection $columnTransformations, string $tableName) {
+            $ddl = $this->source->select("show create table $tableName")[0];
+            $this->target->statement($ddl->{'Create Table'} ?? $ddl->{'Create View'});
+            // Only keep source tables, for source views, we are done.
+            return (isset($ddl->{'Create Table'}));
         });
         $this->target->getSchemaBuilder()->enableForeignKeyConstraints();
 
@@ -84,7 +86,8 @@ class DBMask
 
             $filter = data_get($this->filters, $tableName);
             $create = "create $targetType $schema.$tableName ";
-            $generated = ($targetType === DBMask::TARGET_MATERIALIZE) ? (new SourceTable($this->source, $tableName))->getGeneratedColumns() : collect([]);
+            $sourceTable = (new SourceTable($this->source, $tableName));
+            $generated = ($targetType === DBMask::TARGET_MATERIALIZE) ? $sourceTable->getGeneratedColumns() : collect([]);
             $select = "select {$this->getSelectExpression($columnTransformations, $generated, $schema)} from $tableName " . ($filter ? "where $filter; " : "; ");
 
             $this->source->statement(
@@ -185,7 +188,7 @@ class DBMask
         $notices = collect();
         $schemaManager = $this->source->getDoctrineSchemaManager();
 
-        $sourceTables = collect($schemaManager->listTableNames());
+        $sourceTables = collect($schemaManager->listTableNames())->merge(array_keys($schemaManager->listViews()));
         $configTables = $this->tables->keys();
 
         $tablesMissingInSchema = $configTables->diff($sourceTables);
