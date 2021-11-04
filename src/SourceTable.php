@@ -3,22 +3,36 @@
 namespace TemperWorks\DBMask;
 
 use Doctrine\DBAL\Schema\Column;
+use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Types\DateTimeType;
 use Exception;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Collection;
+use RuntimeException;
+use stdClass;
 
 class SourceTable
 {
-    public $table;
-    public $db;
-    public $name;
+    public Table $table;
+    public Connection $db;
+    public string $name;
+    public ColumnTransformationCollection $columnTransformations;
+    protected object $rawddl;
+    public string $ddl;
 
-    public function __construct(Connection $connection, string $tableName)
+    public function __construct(Connection $connection, string $tableName, ?array $columnTransformations = [])
     {
         $this->name = $tableName;
         $this->db = $connection;
         $this->table = $this->db->getDoctrineSchemaManager()->listTableDetails($tableName);
+        $this->rawddl = $this->getDDL();
+        $this->ddl = $this->rawddl->{'Create View'} ?? $this->rawddl->{'Create Table'} ?? '';
+        $this->columnTransformations = (new ColumnTransformationCollection($columnTransformations ?? []));
+        $this->columnTransformations = $this->columnTransformations
+            ->mergeWhen((bool) config('dbmask.auto_include_pks'), $this->getPKColumns()->diff($this->columnTransformations->keys()))
+            ->mergeWhen((bool) config('dbmask.auto_include_timestamps') !== null, $this->getTimestampColumns()->diff($this->columnTransformations->keys()))
+            ->populateKeys()
+            ->sortByOrdinalPosition($this->getColumnOrdinalPositions());
     }
 
     public function getPKColumns(): ColumnTransformationCollection
@@ -53,5 +67,24 @@ class SourceTable
         return collect($this->db
             ->select("select column_name as `name` from information_schema.columns where TABLE_NAME = '$this->name' and length(GENERATION_EXPRESSION) > 0"))
             ->pluck('name');
+    }
+
+    protected function getDDL(): object
+    {
+        try {
+            return $this->db->select("show create table $this->name")[0];
+        } catch (RuntimeException $exception) {
+            return new stdClass();
+        }
+    }
+
+    public function isView(): bool
+    {
+        return isset($this->rawddl->{'Create View'});
+    }
+
+    public function isTable(): bool
+    {
+        return isset($this->rawddl->{'Create Table'});
     }
 }

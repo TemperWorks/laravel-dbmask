@@ -5,6 +5,7 @@ namespace TemperWorks\DBMask\Tests;
 use Config;
 use DB;
 use Illuminate\Database\Connection;
+use Illuminate\Support\Collection;
 use Orchestra\Testbench\TestCase as Orchestra;
 use Schema;
 use TemperWorks\DBMask\DBMask;
@@ -76,5 +77,11 @@ abstract class TestCase extends Orchestra
     {
         $dbmask = new DBMask($this->source, $this->materialized);
         $dbmask->materialize();
+    }
+
+    protected function validate(): Collection
+    {
+        $dbmask = new DBMask($this->source, $this->materialized);
+        return $dbmask->validateConfig(DBMask::TARGET_MATERIALIZE);
     }
 }

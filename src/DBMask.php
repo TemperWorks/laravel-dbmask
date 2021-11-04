@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class DBMask
 {
@@ -18,33 +19,23 @@ class DBMask
     protected Collection $tables;
     protected Connection $source;
     protected ?Connection $target;
+    protected string $targetSchema;
 
-    /** @var array */
-    protected $filters = [];
+    protected array $filters = [];
 
     public function __construct(Connection $source, ?Connection $target=null, ?Command $command=null)
     {
         $this->command = $command;
         $this->source = $source;
         $this->target = $target;
+        $this->targetSchema = $this->target->getDatabaseName();
 
         $this->source->getDoctrineSchemaManager()
             ->getDatabasePlatform()
             ->registerDoctrineTypeMapping('enum', 'string');
 
         $this->tables = collect(config('dbmask')['tables'])
-            ->map(function(?array $columnTransformations, string $tableName) {
-                $sourceTable = new SourceTable($this->source, $tableName);
-                $columnTransformations = new ColumnTransformationCollection($columnTransformations ?? []);
-
-                return $columnTransformations
-                    ->mergeWhen((bool) config('dbmask.auto_include_pks'),
-                        $sourceTable->getPKColumns()->diff($columnTransformations->keys()))
-                    ->mergeWhen(config('dbmask.auto_include_timestamps') !== null,
-                        $sourceTable->getTimestampColumns()->diff($columnTransformations->keys()))
-                    ->populateKeys()
-                    ->sortByOrdinalPosition($sourceTable);
-            });
+            ->map(fn(?array $columnTransformations, string $tableName) => new SourceTable($this->source, $tableName, $columnTransformations));
     }
 
     public function mask(): void
@@ -55,14 +46,13 @@ class DBMask
 
         $sourceViews = Collect([]);
 
-        $this->tables = $this->tables->filter(function(ColumnTransformationCollection $columnTransformations, string $tableName) use ($sourceViews) {
-            $ddl = $this->source->select("show create table $tableName")[0];
+        $this->tables = $this->tables->filter(function(SourceTable $table) use ($sourceViews) {
             // If source table is a view, prepare to create an identical view on target after table transforms are done.
-            if (isset($ddl->{'Create View'})) {
-                $sourceViews->push($ddl->{'Create View'});
+            if ($table->isView()) {
+                $sourceViews->push($table->ddl);
             }
             // Only keep source tables, for source views, we are done.
-            return (isset($ddl->{'Create Table'}));
+            return $table->isTable();
         });
 
         $this->transformTables(DBMask::TARGET_MASK);
@@ -80,11 +70,10 @@ class DBMask
 
         // Prepare table structure for materialized views
         $this->target->getSchemaBuilder()->disableForeignKeyConstraints();
-        $this->tables = $this->tables->filter(function(ColumnTransformationCollection $columnTransformations, string $tableName) {
-            $ddl = $this->source->select("show create table $tableName")[0];
-            $this->target->statement($ddl->{'Create Table'} ?? $ddl->{'Create View'});
+        $this->tables = $this->tables->filter(function(SourceTable $table) {
+            $this->target->statement($table->ddl);
             // Only keep source tables, for source views, we are done.
-            return (isset($ddl->{'Create Table'}));
+            return ($table->isTable());
         });
         $this->target->getSchemaBuilder()->enableForeignKeyConstraints();
 
@@ -95,24 +84,20 @@ class DBMask
     {
         $this->source->getSchemaBuilder()->disableForeignKeyConstraints();
         $this->registerMysqlFunctions();
-
-        $this->tables->each(function(ColumnTransformationCollection $columnTransformations, string $tableName) use ($targetType){
-            $schema = $this->target->getDatabaseName();
-            $this->log("creating $targetType <fg=green>$tableName</fg=green> in schema <fg=blue>$schema</fg=blue>");
-
-            $filter = data_get($this->filters, $tableName);
-            $create = "create $targetType $schema.$tableName ";
-            $sourceTable = (new SourceTable($this->source, $tableName));
-            $generated = ($targetType === DBMask::TARGET_MATERIALIZE) ? $sourceTable->getGeneratedColumns() : collect([]);
-            $select = "select {$this->getSelectExpression($columnTransformations, $generated, $schema)} from $tableName " . ($filter ? "where $filter; " : "; ");
-
-            $this->source->statement(
-                ($targetType === DBMask::TARGET_MASK)
-                    ? $create . ' as ' . $select
-                    : "insert $schema.$tableName $select"
-            );
-        });
+        $this->tables->each(fn(SourceTable $table) => $this->source->statement($this->getTransformationStatement($targetType, $table->name, $table->columnTransformations)));
         $this->source->getSchemaBuilder()->enableForeignKeyConstraints();
+    }
+
+    protected function getTransformationStatement(string $targetType, string $tableName, ColumnTransformationCollection $columnTransformations): string
+    {
+        $this->log("creating $targetType <fg=green>$tableName</fg=green> in schema <fg=blue>$this->targetSchema</fg=blue>");
+
+        $create = "create $targetType $this->targetSchema.$tableName ";
+        $select = $this->getSelectExpression($targetType, $columnTransformations, $tableName);
+
+        return ($targetType === DBMask::TARGET_MASK)
+            ? $create . ' as ' . $select
+            : "insert $this->targetSchema.$tableName $select";
     }
 
     public function dropMasked()
@@ -160,14 +145,20 @@ class DBMask
         return collect(range(1,$number))->map($function)->toArray();
     }
 
-    protected function getSelectExpression(Collection $columnTransformations, Collection $generated, string $schema): string
+    protected function getSelectExpression(string $targetType, Collection $columnTransformations, string $tableName): string
     {
-        $select = $columnTransformations->map(function($column, $key) use ($schema, $generated) {
-            $column = Str::startsWith($column, 'mask_random_') ? $schema.'.'.$column : $column;
+        $filter = data_get($this->filters, $tableName);
+        $sourceTable = (new SourceTable($this->source, $tableName));
+        $generated = ($targetType === DBMask::TARGET_MATERIALIZE) ? $sourceTable->getGeneratedColumns() : collect([]);
+
+        $select = $columnTransformations->map(function($column, $key) use ($generated) {
+            $column = Str::startsWith($column, 'mask_random_') ? $this->targetSchema.'.'.$column : $column;
             $column = Str::startsWith($column, 'mask_bcrypt_') ? "'".bcrypt(Str::after($column,'mask_bcrypt_'))."'" : $column;
             $column = $generated->contains($key) ? "default($column)" : $column;
             return "$column as `$key`";
         })->values()->implode(', ');
+
+        $select = "select $select from $tableName " . ($filter ? "where $filter; " : "; ");
 
         return $select ?: 'null';
     }
@@ -202,6 +193,10 @@ class DBMask
     public function validateConfig(string $targetType): Collection
     {
         $notices = collect();
+
+        $syntaxErrors = $this->validateSyntax($targetType);
+        if ($syntaxErrors->isNotEmpty()) $notices['DBMask Config contains SQL syntax errors'] = $syntaxErrors;
+
         $schemaManager = $this->source->getDoctrineSchemaManager();
 
         $sourceTables = collect($schemaManager->listTableNames());
@@ -217,23 +212,41 @@ class DBMask
 
         if ($targetType === DBMask::TARGET_MATERIALIZE) {
             $this->tables
-                ->filter(function(string $tableName) use ($sourceTables) {
-                    return $sourceTables->contains($tableName);
+                ->filter(function(SourceTable $table) use ($sourceTables) {
+                    return $sourceTables->contains($table->name);
                 })
-                ->each(function(ColumnTransformationCollection $columns, string $tableName) use ($schemaManager, $notices) {
+                ->each(function(SourceTable $table) use ($schemaManager, $notices) {
 
-                $sourceColumns = collect(array_keys($schemaManager->listTableDetails($tableName)->getColumns()));
-                $configColumns = $columns->keys()->map(function($name) { return strtolower($name); });
+                    $sourceColumns = collect(array_keys($schemaManager->listTableDetails($table->name)->getColumns()));
+                    $configColumns = $table->columnTransformations->keys()->map(function($name) { return strtolower($name); });
 
-                $missingInSchema = $configColumns->diff($sourceColumns);
-                $missingInConfig = $sourceColumns->diff($configColumns);
+                    $missingInSchema = $configColumns->diff($sourceColumns);
+                    $missingInConfig = $sourceColumns->diff($configColumns);
 
-                if ($missingInSchema->isNotEmpty()) $notices['Defined Columns Missing In DB Schema'] = $missingInSchema;
-                if ($missingInConfig->isNotEmpty()) $notices['Defined Columns Missing In DBMask Config'] = $missingInConfig;
-            });
+                    if ($missingInSchema->isNotEmpty()) $notices['Defined Columns Missing In DB Schema'] = $missingInSchema;
+                    if ($missingInConfig->isNotEmpty()) $notices['Defined Columns Missing In DBMask Config'] = $missingInConfig;
+                });
         }
 
         return $notices;
+    }
+
+    protected function validateSyntax(string $targetType): Collection
+    {
+        $syntaxErrors = collect();
+
+        $this->tables
+            ->filter(fn(SourceTable $table) => $table->isTable())
+            ->map(fn(SourceTable $table) => $this->getSelectExpression($targetType, $table->columnTransformations, $table->name))
+            ->each(function($statement) use ($syntaxErrors) {
+                try {
+                    $this->source->select('explain '. $statement);
+                } catch (RuntimeException $exception) {
+                    $syntaxErrors->push($statement);
+                }
+            });
+
+        return $syntaxErrors;
     }
 
     public function setFilters(array $filters) : void

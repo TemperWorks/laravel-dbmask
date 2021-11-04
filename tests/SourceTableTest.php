@@ -18,7 +18,7 @@ class SourceTableTest extends TestCase
             $table->timestamps();
         });
 
-        $sourceTable = new SourceTable($this->source, 'table');
+        $sourceTable = new SourceTable($this->source, 'table', []);
 
         $this->assertEquals(['id'], $sourceTable->getPKColumns()->toArray());
         $this->assertEquals(['created_at', 'updated_at'], $sourceTable->getTimestampColumns()->toArray());

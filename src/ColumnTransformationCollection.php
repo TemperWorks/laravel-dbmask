@@ -20,10 +20,8 @@ class ColumnTransformationCollection extends Collection
         });
     }
 
-    public function sortByOrdinalPosition(SourceTable $table)
+    public function sortByOrdinalPosition(Collection $positions)
     {
-        $positions = $table->getColumnOrdinalPositions();
-
         return $this->sortBy(function($column, $key) use ($positions){
             return $positions->search($key);
         });
