@@ -169,8 +169,8 @@ class AnonymizationTest extends TestCase
         $this->assertEmpty($validation, $validation->toJson(JSON_PRETTY_PRINT));
 
         // SQL null is allowed (will set masked column to null).
-        // SQL expressions & functions like encrypt are also allowed
-        Config::set('dbmask.tables.users', ['id' => 'id + 1', 'email' => 'null', 'password' => 'encrypt(password)']);
+        // SQL expressions & functions like md5 are also allowed (md5 is not a great function though)
+        Config::set('dbmask.tables.users', ['id' => 'id + 1', 'email' => 'null', 'password' => 'md5(password)']);
         $validation = $this->validate();
         $this->assertEmpty($validation, $validation->toJson(JSON_PRETTY_PRINT));
 
@@ -179,8 +179,8 @@ class AnonymizationTest extends TestCase
         $validation = $this->validate();
         $this->assertNotEmpty($validation, $validation->toJson(JSON_PRETTY_PRINT));
 
-        // Type in encrypt, should not pass validation
-        Config::set('dbmask.tables.users', ['id', 'email' => 'encyrpt(email)', 'password']);
+        // Typo in md5, should not pass validation
+        Config::set('dbmask.tables.users', ['id', 'email' => 'm5d(email)', 'password']);
         $validation = $this->validate();
         $this->assertNotEmpty($validation, $validation->toJson(JSON_PRETTY_PRINT));
 
