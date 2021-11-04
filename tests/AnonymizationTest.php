@@ -166,32 +166,32 @@ class AnonymizationTest extends TestCase
     {
         Config::set('dbmask.tables.users', ['id', 'email', 'password']);
         $validation = $this->validate();
-        $this->assertEmpty($validation);
+        $this->assertEmpty($validation, $validation->toJson(JSON_PRETTY_PRINT));
 
         // SQL null is allowed (will set masked column to null).
         // SQL expressions & functions like encrypt are also allowed
         Config::set('dbmask.tables.users', ['id' => 'id + 1', 'email' => 'null', 'password' => 'encrypt(password)']);
         $validation = $this->validate();
-        $this->assertEmpty($validation);
+        $this->assertEmpty($validation, $validation->toJson(JSON_PRETTY_PRINT));
 
         // Incrementors are not valid SQL expressions
         Config::set('dbmask.tables.users', ['id' => 'id++', 'email', 'password']);
         $validation = $this->validate();
-        $this->assertNotEmpty($validation);
+        $this->assertNotEmpty($validation, $validation->toJson(JSON_PRETTY_PRINT));
 
         // Type in encrypt, should not pass validation
         Config::set('dbmask.tables.users', ['id', 'email' => 'encyrpt(email)', 'password']);
         $validation = $this->validate();
-        $this->assertNotEmpty($validation);
+        $this->assertNotEmpty($validation, $validation->toJson(JSON_PRETTY_PRINT));
 
         // PHP null is not allowed as a column masking definition, SQL null should be quoted
         Config::set('dbmask.tables.users', ['id', 'email' => null, 'password']);
         $validation = $this->validate();
-        $this->assertNotEmpty($validation);
+        $this->assertNotEmpty($validation, $validation->toJson(JSON_PRETTY_PRINT));
 
         // There is no column passwords in users
         Config::set('dbmask.tables.users', ['id', 'email', 'passwords']);
         $validation = $this->validate();
-        $this->assertNotEmpty($validation);
+        $this->assertNotEmpty($validation, $validation->toJson(JSON_PRETTY_PRINT));
     }
 }
