@@ -23,15 +23,12 @@ class DBMask
 
     protected array $filters = [];
 
-    public function __construct(Connection $source, ?Connection $target=null, ?Command $command=null)
+    public function __construct(Connection $source, Connection $target, ?Command $command=null)
     {
         $this->command = $command;
         $this->source = $source;
         $this->target = $target;
-
-        // If target schema is not configured, validation should happen against source.
-        // Write statements will however only be executed on target.
-        $this->schema = ($this->target ?? $this->source)->getDatabaseName();
+        $this->schema = $this->target->getDatabaseName();
 
         $this->source->getDoctrineSchemaManager()
             ->getDatabasePlatform()
@@ -43,8 +40,6 @@ class DBMask
 
     public function mask(): void
     {
-        if(!$this->target) throw new Exception('Target database must be configured to mask');
-
         $validation = $this->validateConfig(DBMask::TARGET_MASK);
         if ($validation->except('Defined Tables Missing In DBMask Config')->isNotEmpty())
             throw new Exception($validation->toJson(JSON_PRETTY_PRINT));
@@ -69,8 +64,6 @@ class DBMask
 
     public function materialize(): void
     {
-        if(!$this->target) throw new Exception('Target database must be configured to materialize');
-
         $validation = $this->validateConfig(DBMask::TARGET_MATERIALIZE);
         if ($validation->except('Defined Tables Missing In DBMask Config')->isNotEmpty())
             throw new Exception($validation->toJson(JSON_PRETTY_PRINT));
@@ -197,12 +190,14 @@ class DBMask
         );
     }
 
-    public function validateConfig(string $targetType): Collection
+    public function validateConfig(string $targetType, bool $validateSyntax = false): Collection
     {
         $notices = collect();
 
-        $syntaxErrors = $this->validateSyntax($targetType);
-        if ($syntaxErrors->isNotEmpty()) $notices['DBMask Config contains SQL syntax errors'] = $syntaxErrors;
+        if ($validateSyntax) {
+            $syntaxErrors = $this->validateSyntax($targetType);
+            if ($syntaxErrors->isNotEmpty()) $notices['DBMask Config contains SQL syntax errors'] = $syntaxErrors;
+        }
 
         $schemaManager = $this->source->getDoctrineSchemaManager();
 
@@ -242,6 +237,7 @@ class DBMask
     {
         $syntaxErrors = collect();
 
+        $this->registerMysqlFunctions();
         $this->tables
             ->filter(fn(SourceTable $table) => $table->isTable())
             ->map(fn(SourceTable $table) => $this->getSelectExpression($targetType, $table->columnTransformations, $table->name))

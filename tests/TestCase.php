@@ -82,6 +82,6 @@ abstract class TestCase extends Orchestra
     protected function validate(): Collection
     {
         $dbmask = new DBMask($this->source, $this->materialized);
-        return $dbmask->validateConfig(DBMask::TARGET_MATERIALIZE);
+        return $dbmask->validateConfig(DBMask::TARGET_MATERIALIZE, true);
     }
 }
