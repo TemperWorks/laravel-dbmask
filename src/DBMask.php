@@ -19,7 +19,7 @@ class DBMask
     protected Collection $tables;
     protected Connection $source;
     protected ?Connection $target;
-    protected string $targetSchema;
+    protected string $schema;
 
     protected array $filters = [];
 
@@ -28,7 +28,10 @@ class DBMask
         $this->command = $command;
         $this->source = $source;
         $this->target = $target;
-        $this->targetSchema = $this->target->getDatabaseName();
+
+        // If target schema is not configured, validation should happen against source.
+        // Write statements will however only be executed on target.
+        $this->schema = ($this->target ?? $this->source)->getDatabaseName();
 
         $this->source->getDoctrineSchemaManager()
             ->getDatabasePlatform()
@@ -40,6 +43,8 @@ class DBMask
 
     public function mask(): void
     {
+        if(!$this->target) throw new Exception('Target database must be configured to mask');
+
         $validation = $this->validateConfig(DBMask::TARGET_MASK);
         if ($validation->except('Defined Tables Missing In DBMask Config')->isNotEmpty())
             throw new Exception($validation->toJson(JSON_PRETTY_PRINT));
@@ -64,6 +69,8 @@ class DBMask
 
     public function materialize(): void
     {
+        if(!$this->target) throw new Exception('Target database must be configured to materialize');
+
         $validation = $this->validateConfig(DBMask::TARGET_MATERIALIZE);
         if ($validation->except('Defined Tables Missing In DBMask Config')->isNotEmpty())
             throw new Exception($validation->toJson(JSON_PRETTY_PRINT));
@@ -90,14 +97,14 @@ class DBMask
 
     protected function getTransformationStatement(string $targetType, string $tableName, ColumnTransformationCollection $columnTransformations): string
     {
-        $this->log("creating $targetType <fg=green>$tableName</fg=green> in schema <fg=blue>$this->targetSchema</fg=blue>");
+        $this->log("creating $targetType <fg=green>$tableName</fg=green> in schema <fg=blue>$this->schema</fg=blue>");
 
-        $create = "create $targetType $this->targetSchema.$tableName ";
+        $create = "create $targetType $this->schema.$tableName ";
         $select = $this->getSelectExpression($targetType, $columnTransformations, $tableName);
 
         return ($targetType === DBMask::TARGET_MASK)
             ? $create . ' as ' . $select
-            : "insert $this->targetSchema.$tableName $select";
+            : "insert $this->schema.$tableName $select";
     }
 
     public function dropMasked()
@@ -152,7 +159,7 @@ class DBMask
         $generated = ($targetType === DBMask::TARGET_MATERIALIZE) ? $sourceTable->getGeneratedColumns() : collect([]);
 
         $select = $columnTransformations->map(function($column, $key) use ($generated) {
-            $column = Str::startsWith($column, 'mask_random_') ? $this->targetSchema.'.'.$column : $column;
+            $column = Str::startsWith($column, 'mask_random_') ? $this->schema.'.'.$column : $column;
             $column = Str::startsWith($column, 'mask_bcrypt_') ? "'".bcrypt(Str::after($column,'mask_bcrypt_'))."'" : $column;
             $column = $generated->contains($key) ? "default($column)" : $column;
             return "$column as `$key`";
