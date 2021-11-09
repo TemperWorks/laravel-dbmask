@@ -152,7 +152,7 @@ class DBMask
         $generated = ($targetType === DBMask::TARGET_MATERIALIZE) ? $sourceTable->getGeneratedColumns() : collect([]);
 
         $select = $columnTransformations->map(function($column, $key) use ($generated) {
-            $column = Str::startsWith($column, 'mask_random_') ? $this->schema.'.'.$column : $column;
+            $column = Str::replace('mask_random_', $this->schema.'.mask_random_', $column);
             $column = Str::startsWith($column, 'mask_bcrypt_') ? "'".bcrypt(Str::after($column,'mask_bcrypt_'))."'" : $column;
             $column = $generated->contains($key) ? "default($column)" : $column;
             return "$column as `$key`";

@@ -86,6 +86,28 @@ class AnonymizationTest extends TestCase
         $this->assertTrue(Hash::check('secret', $anonimizedUser->password));
     }
 
+    public function test_it_randomizes_values()
+    {
+        Config::set('dbmask.tables.users', ['id', 'email' => DBMask::random('id', 'emailset'), 'password']);
+        Config::set('dbmask.mask_datasets', ['emailset' => [ 'foo@example.com', 'bar@example.com']]);
+
+        $this->mask();
+        $this->materialize();
+
+        $sourceUser = $this->source->table('users')
+            ->where('email', 'bob@example.com')
+            ->first();
+
+        $this->assertNotNull($sourceUser);
+
+        // Both in the masked & materialized DB, the email has been given a value from the set
+        $anonimizedUser = $this->masked->table('users')->find($sourceUser->id);
+        $this->assertEquals('foo@example.com', $anonimizedUser->email);
+
+        $anonimizedUser = $this->materialized->table('users')->find($sourceUser->id);
+        $this->assertEquals('foo@example.com', $anonimizedUser->email);
+    }
+
     public function test_it_conditionally_anonymizes_values()
     {
         Config::set('dbmask.tables.users', [
