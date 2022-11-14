@@ -115,6 +115,10 @@ class DBMask
         $schema = $tgt->getDatabaseName();
         $this->log("Dropping all {$targetType}s in schema <fg=blue>$schema</fg=blue>");
 
+        if ($tgt->selectOne("select count(*) c from information_schema.{$targetType}s where table_schema = '$schema'")->c === 0) {
+            return;
+        }
+
         $tgt->unprepared("
             start transaction;
             set @t = null;
