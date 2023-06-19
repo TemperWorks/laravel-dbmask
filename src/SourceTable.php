@@ -38,7 +38,7 @@ class SourceTable
     public function getPKColumns(): ColumnTransformationCollection
     {
         try {
-            return (new ColumnTransformationCollection($this->table->getPrimaryKeyColumns()));
+            return (new ColumnTransformationCollection(array_map(static function (Column $column) { return $column->getName(); }, $this->table->getPrimaryKeyColumns())));
         } catch (Exception $e) {
             // Table without PK
             return (new ColumnTransformationCollection());
